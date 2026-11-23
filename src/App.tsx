@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleDot, Flag, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
+import { CircleDot, Flag, HelpCircle, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
 import { endSession } from './engine/session'
 import { MODE_INFO, type Session } from './engine/types'
 import { openSession, updateActive, useData } from './store'
@@ -11,6 +11,10 @@ import Standings from './components/Standings'
 import History from './components/History'
 import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
+import Help from './components/Help'
+import MoreMenu from './components/MoreMenu'
+import Tour, { tourSeen } from './components/Tour'
+import { CourtLines, Logo } from './components/art'
 import UndoButton, { SaveStatus } from './components/UndoButton'
 
 type Tab = 'live' | 'standings' | 'history'
@@ -18,18 +22,28 @@ type Tab = 'live' | 'standings' | 'history'
 export default function App() {
   const { sessions, activeId } = useData()
   const [creating, setCreating] = useState(false)
+  const [help, setHelp] = useState(false)
+  const [tour, setTour] = useState(() => !tourSeen())
   const [tab, setTab] = useState<Tab>('live')
   const active = sessions.find((s) => s.id === activeId) ?? null
 
   useWakeLock(!!active && !active.endedAt)
 
-  if (creating) return <Setup onCancel={() => setCreating(false)} />
-  if (active?.endedAt) return <Summary s={active} onBack={() => openSession(null)} />
-  if (!active) return <Home onNew={() => setCreating(true)} />
-  return <Shell s={active} tab={tab} setTab={setTab} />
+  let screen
+  if (creating) screen = <Setup onCancel={() => setCreating(false)} />
+  else if (active?.endedAt) screen = <Summary s={active} onBack={() => openSession(null)} />
+  else if (!active) screen = <Home onNew={() => setCreating(true)} onHelp={() => setHelp(true)} />
+  else screen = <Shell s={active} tab={tab} setTab={setTab} onHelp={() => setHelp(true)} />
+  return (
+    <>
+      {screen}
+      {help && <Help onClose={() => setHelp(false)} onTour={() => setTour(true)} />}
+      {tour && <Tour onDone={() => setTour(false)} />}
+    </>
+  )
 }
 
-function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => void }) {
+function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: Tab) => void; onHelp: () => void }) {
   const tabs: { id: Tab; label: string; icon: typeof Flag }[] = [
     { id: 'live', label: 'Courts', icon: CircleDot },
     { id: 'standings', label: 'Standings', icon: Trophy },
@@ -42,18 +56,19 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
   }
   return (
     <div className="flex min-h-full flex-col md:flex-row">
-      <nav className="sticky top-0 z-20 hidden w-56 shrink-0 flex-col gap-1 self-start border-r border-slate-200 bg-white p-3 md:flex md:h-dvh dark:border-slate-800 dark:bg-slate-900">
+      <nav className="sticky top-0 z-20 hidden w-56 shrink-0 flex-col gap-1 self-start border-r border-slate-200 bg-white/70 p-3 backdrop-blur-xl md:flex md:h-dvh dark:border-white/10 dark:bg-slate-950/60">
         <button className="mb-2 px-2 text-left" onClick={() => openSession(null)} title="All sessions">
-          <div className="text-xl font-extrabold text-green-600">Paddl</div>
+          <div className="text-xl font-black tracking-tight text-brand">PADDL</div>
           <div className="truncate text-xs text-slate-500">{s.name}</div>
           <div className="text-[11px] text-slate-400">{MODE_INFO[s.config.mode].label}</div>
         </button>
         {tabs.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${tab === t.id ? 'bg-green-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+          <button key={t.id} onClick={() => setTab(t.id)} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${tab === t.id ? 'bg-accent text-accent-ink shadow-[0_6px_20px_-8px_rgba(182,255,59,0.7)]' : 'text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10'}`}>
             <t.icon size={18} /> {t.label}
           </button>
         ))}
         <div className="mt-auto space-y-1">
+          <button className="btn-ghost w-full justify-start" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
           <UndoButton full />
           <SaveStatus className="block px-1 pb-1" />
           <div className="pb-1"><ThemeSwitch /></div>
@@ -63,14 +78,14 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
       </nav>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
+        <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/75 px-4 py-2 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/70">
           <button className="min-w-0 text-left" onClick={() => openSession(null)}>
             <div className="truncate text-base font-extrabold leading-tight">{s.name}</div>
             <div className="truncate text-[11px] text-slate-500">{MODE_INFO[s.config.mode].label}</div>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             <UndoButton />
-            <ThemeSwitch compact />
+            <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} />
             <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
           </div>
         </header>
@@ -81,9 +96,9 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
           {tab === 'history' && <History s={s} />}
         </main>
 
-        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] md:hidden dark:border-slate-800 dark:bg-slate-900">
+        <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-slate-200 bg-white/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/75">
           {tabs.map((t) => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${tab === t.id ? 'text-green-600' : 'text-slate-500'}`}>
+            <button key={t.id} onClick={() => setTab(t.id)} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-xs font-semibold ${tab === t.id ? 'text-brand' : 'text-slate-500'}`}>
               <t.icon size={22} /> {t.label}
             </button>
           ))}
@@ -93,38 +108,56 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
   )
 }
 
-function Home({ onNew }: { onNew: () => void }) {
+function Home({ onNew, onHelp }: { onNew: () => void; onHelp: () => void }) {
   const { sessions } = useData()
   const live = sessions.filter((s) => !s.endedAt)
   const past = sessions.filter((s) => s.endedAt)
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-16">
-      <div className="mb-4 flex justify-end"><ThemeSwitch /></div>
-      <div className="mb-6 text-center">
-        <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-green-600 text-3xl shadow-lg">🥒</div>
-        <h1 className="text-4xl font-extrabold tracking-tight">Paddl</h1>
-        <p className="mt-1 text-slate-500 dark:text-slate-400">Fair pickleball queues for open play. Works offline.</p>
+      <div className="mb-2 flex items-center justify-between">
+        <button className="btn-soft !min-h-10" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+        <ThemeSwitch />
       </div>
-      <button className="btn-primary w-full !min-h-14 text-base" onClick={onNew}><Plus size={22} /> New session</button>
+
+      <section className="card relative mt-3 overflow-hidden px-5 pt-8 pb-7 text-center">
+        <CourtLines className="pointer-events-none absolute inset-x-4 top-4 h-auto w-[calc(100%-2rem)] text-slate-400/20 [mask-image:linear-gradient(to_bottom,transparent,#000_30%,#000_55%,transparent)] dark:text-accent/12" />
+        <div className="relative">
+          <div className="mx-auto w-fit"><Logo size={84} /></div>
+          <h1 className="mt-3 text-5xl font-black tracking-tight drop-shadow-[0_2px_12px_var(--bg)]">PADDL</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-300">Fair pickleball queues for open play.<br />No sign-up. Works offline. 🏓</p>
+          <button className="btn-primary mt-6 w-full !min-h-14 text-base" onClick={onNew}><Plus size={22} /> New session</button>
+        </div>
+      </section>
 
       {live.length > 0 && (
         <section className="mt-8">
-          <h2 className="label">In progress</h2>
+          <h2 className="label">🟢 In progress</h2>
           <div className="space-y-2">{live.map((s) => <Row key={s.id} s={s} live />)}</div>
         </section>
       )}
       {past.length > 0 && (
         <section className="mt-8">
-          <h2 className="label">Past sessions</h2>
+          <h2 className="label">🏆 Past sessions</h2>
           <div className="space-y-2">{past.map((s) => <Row key={s.id} s={s} />)}</div>
         </section>
       )}
       {sessions.length === 0 && (
-        <ul className="mt-8 space-y-2 text-sm text-slate-500 dark:text-slate-400">
-          <li>1. Add your players and pick how you want to match them.</li>
-          <li>2. Tap <b>Game finished</b> on a court and pick the winner. The next game starts automatically.</li>
-          <li>3. End the session to get final standings and an image to share.</li>
-        </ul>
+        <section className="mt-8">
+          <h2 className="label">How it works</h2>
+          <ol className="grid gap-2 sm:grid-cols-3">
+            {[
+              ['👥', 'Add players', 'Paste your list and pick your courts and a mode.'],
+              ['🏆', 'Tap Won', 'When a game ends, tap the winning team. The next match starts itself.'],
+              ['📸', 'Share the recap', 'End the session for standings, history and images for the group chat.'],
+            ].map(([e, title, text], i) => (
+              <li key={title} className="card p-4">
+                <div className="flex items-center gap-2"><span className="text-2xl">{e}</span><span className="text-xs font-bold text-slate-400">STEP {i + 1}</span></div>
+                <div className="mt-1 font-bold">{title}</div>
+                <div className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{text}</div>
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
     </div>
   )

@@ -1,14 +1,92 @@
 @import "tailwindcss";
 
-/* Dark mode is driven by a .dark class on <html> (set from the theme switch, or the OS when on "System"). */
+/* Dark mode is driven by a .dark class on <html> (set from the theme switch, or the OS when on "Auto"). */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------------------------------------------------------------------------------------------
+ * NEON COURT palette
+ * The whole app is written with Tailwind's slate / green / amber / sky / red colours. Re-mapping those
+ * here re-colours every screen at once, so light and dark both stay consistent.
+ *   slate -> cool ink-blue neutrals     green -> electric lime (the brand accent)
+ *   sky   -> cyan                       amber -> warm gold          red -> hot coral
+ * ------------------------------------------------------------------------------------------- */
+@theme {
+  --color-slate-50: #f6f8fc;
+  --color-slate-100: #eef2f9;
+  --color-slate-200: #dde4f0;
+  --color-slate-300: #c3cde0;
+  --color-slate-400: #8a97b1;
+  --color-slate-500: #5f6d89;
+  --color-slate-600: #475270;
+  --color-slate-700: #2a3350;
+  --color-slate-800: #161d33;
+  --color-slate-900: #0c1121;
+  --color-slate-950: #060913;
+
+  /* Lime: 500/600 are the solid brand fills (dark text sits on them), 700-900 are readable text on light surfaces. */
+  --color-green-50: #f4ffe0;
+  --color-green-100: #e6ffb3;
+  --color-green-200: #d2ff7d;
+  --color-green-300: #c3ff55;
+  --color-green-400: #b6ff3b;
+  --color-green-500: #a2f01c;
+  --color-green-600: #b6ff3b;
+  --color-green-700: #3f6b00;
+  --color-green-800: #345700;
+  --color-green-900: #2a4600;
+  --color-green-950: #14210a;
+
+  --color-sky-100: #d5f6fd;
+  --color-sky-300: #67e3f9;
+  --color-sky-500: #22d3ee;
+  --color-sky-800: #0b5e72;
+  --color-sky-950: #062a35;
+
+  --color-amber-50: #fff8e6;
+  --color-amber-100: #ffeec2;
+  --color-amber-200: #ffe08a;
+  --color-amber-300: #ffd25c;
+  --color-amber-400: #ffc233;
+  --color-amber-500: #ffb000;
+  --color-amber-600: #c98600;
+  --color-amber-900: #5c3d00;
+  --color-amber-950: #2b1c00;
+
+  --color-red-50: #fff1f1;
+  --color-red-300: #ff9b9b;
+  --color-red-600: #f0364a;
+  --color-red-700: #d41f35;
+  --color-red-800: #9d1426;
+  --color-red-900: #6e0f1d;
+  --color-red-950: #2e0810;
+
+  --color-accent: #b6ff3b;
+  --color-accent-ink: #0b1400;
+  --color-cyan: #22d3ee;
+
+  --font-display: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Display", "Segoe UI", Roboto, sans-serif;
+}
 
 :root {
   color-scheme: light;
+  --bg: #eef2fa;
+  --glow-a: rgba(63, 107, 0, 0.1);
+  --glow-b: rgba(34, 211, 238, 0.14);
+  --grid: rgba(15, 23, 42, 0.055);
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-line: rgba(15, 23, 42, 0.09);
+  --card-glow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 8px 28px -12px rgba(15, 23, 42, 0.18);
 }
 
 :root.dark {
   color-scheme: dark;
+  --bg: #05070d;
+  --glow-a: rgba(182, 255, 59, 0.1);
+  --glow-b: rgba(34, 211, 238, 0.12);
+  --grid: rgba(150, 175, 255, 0.055);
+  --glass: rgba(16, 22, 40, 0.72);
+  --glass-line: rgba(160, 185, 255, 0.13);
+  --card-glow: 0 0 0 1px rgba(182, 255, 59, 0.02), 0 12px 36px -14px rgba(0, 0, 0, 0.7);
 }
 
 html,
@@ -18,36 +96,81 @@ body,
 }
 
 body {
-  @apply bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  @apply text-slate-900 antialiased dark:text-slate-100;
+  background-color: var(--bg);
+  font-family: var(--font-display);
+  font-feature-settings: "tnum", "cv11";
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
 }
 
+/* Soft court-line grid and two colour glows behind everything. Fixed, so it never scrolls or costs layout. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 36rem at 12% -10%, var(--glow-a), transparent 60%),
+    radial-gradient(54rem 32rem at 100% 0%, var(--glow-b), transparent 58%),
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 44px 44px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 44px 44px;
+  mask-image: linear-gradient(to bottom, #000 40%, rgba(0, 0, 0, 0.55));
+}
 
+/* ---- Components ----------------------------------------------------------------------------- */
 @utility card {
-  @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  @apply rounded-2xl border backdrop-blur-md;
+  background: var(--glass);
+  border-color: var(--glass-line);
+  box-shadow: var(--card-glow);
 }
 @utility btn {
-  @apply inline-flex min-h-11 select-none items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40;
+  @apply inline-flex min-h-11 select-none items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold tracking-tight transition active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40;
 }
+/* Primary: electric lime with dark ink for contrast, plus a soft glow. */
 @utility btn-primary {
-  @apply btn bg-green-600 text-white shadow-sm hover:bg-green-700;
+  @apply btn bg-accent text-accent-ink hover:brightness-105;
+  box-shadow: 0 0 0 1px rgba(182, 255, 59, 0.5), 0 6px 22px -6px rgba(182, 255, 59, 0.55);
 }
 @utility btn-soft {
-  @apply btn bg-slate-100 text-slate-800 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700;
+  @apply btn border border-slate-200 bg-white/70 text-slate-800 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10;
 }
 @utility btn-danger {
   @apply btn bg-red-600 text-white hover:bg-red-700;
+  box-shadow: 0 6px 20px -8px rgba(240, 54, 74, 0.6);
 }
 @utility btn-ghost {
-  @apply btn text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800;
+  @apply btn text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10;
 }
 @utility input {
-  @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base outline-none focus:border-green-600 focus:ring-2 focus:ring-green-600/25 dark:border-slate-700 dark:bg-slate-900;
+  @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white/80 px-3 text-base outline-none focus:border-green-700 focus:ring-2 focus:ring-accent/40 dark:border-white/15 dark:bg-white/5 dark:focus:border-accent;
 }
 @utility label {
-  @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400;
+  @apply mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400;
+}
+/* Lime-on-light text must be the dark lime to stay readable; on dark surfaces use the bright one. */
+@utility text-brand {
+  @apply text-green-700 dark:text-accent;
+}
+/* A glowing "live" dot. */
+@utility live-dot {
+  @apply inline-block h-2 w-2 rounded-full bg-accent;
+  box-shadow: 0 0 0 0 rgba(182, 255, 59, 0.7);
+  animation: pulse-dot 1.8s infinite;
+}
+
+@keyframes pulse-dot {
+  0% {
+    box-shadow: 0 0 0 0 rgba(182, 255, 59, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(182, 255, 59, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(182, 255, 59, 0);
+  }
 }
 
 @keyframes sheet-in {
@@ -65,7 +188,7 @@ body {
   animation: sheet-in 0.18s ease-out;
 }
 
-/* Smooth entrance for cards that appear or change (waiting -> next up -> on court). Respects reduced motion. */
+/* Smooth entrance for cards that appear or change (waiting -> next up -> on court). */
 @keyframes paddl-in {
   from {
     opacity: 0;
@@ -83,7 +206,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .paddl-in,
-  .sheet-in {
+  .sheet-in,
+  .live-dot {
     animation: none;
   }
 }

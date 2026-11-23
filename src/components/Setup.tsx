@@ -93,7 +93,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                     cfg.mode === m ? 'border-green-600 bg-green-50 ring-2 ring-green-600/30 dark:bg-green-950/40' : 'border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <div className="text-sm font-bold">{MODE_INFO[m].label}{m === 'fair' && <span className="ml-2 rounded-full bg-green-600 px-2 py-0.5 text-[10px] font-semibold text-white">Recommended</span>}</div>
+                  <div className="text-sm font-bold">{MODE_INFO[m].label}{m === 'fair' && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-ink">Recommended</span>}</div>
                   <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{MODE_INFO[m].blurb}</div>
                 </button>
               ))}

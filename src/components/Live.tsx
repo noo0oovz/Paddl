@@ -184,12 +184,13 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
   const overTime = !!m && now - m.startedAt >= TIME_MARK_MIN * 60000
   return (
     <section className="card paddl-in overflow-hidden">
-      <div className="flex items-center justify-between bg-green-600 px-4 py-2 text-white">
+      <div className="relative flex items-center justify-between border-b border-slate-200 bg-slate-900 px-4 py-2.5 text-white dark:border-white/10 dark:bg-white/[0.04]">
+        <span aria-hidden className={`absolute inset-x-0 top-0 h-0.5 ${m ? 'bg-accent shadow-[0_0_14px_rgba(182,255,59,0.9)]' : 'bg-slate-600'}`} />
         <h2 className="font-bold">{c.name}</h2>
         <button onClick={onTags} className="ml-2 grid h-7 w-7 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} rules and badges`} title="Court badges"><Tag size={14} /></button>
         <span className="flex-1" />
         {m && (
-          <span className="flex items-center gap-1 text-xs font-medium text-green-100">
+          <span className="flex items-center gap-1 text-xs font-medium text-slate-300">
             {winners && m.streak > 0 && <span className="mr-1 flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5"><Crown size={12} /> {m.streak} in a row</span>}
             <Clock size={12} /> {elapsed(m.startedAt, now)}
           </span>

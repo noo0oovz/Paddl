@@ -11,7 +11,7 @@ const OPTIONS: { id: ThemePref; label: string; icon: typeof Sun }[] = [
 export default function ThemeSwitch({ compact = false }: { compact?: boolean }) {
   const pref = useTheme()
   return (
-    <div role="radiogroup" aria-label="Colour theme" className="inline-flex rounded-xl bg-slate-200/70 p-1 dark:bg-slate-800">
+    <div role="radiogroup" aria-label="Colour theme" className="inline-flex rounded-xl border border-slate-200 bg-slate-200/60 p-1 dark:border-white/10 dark:bg-white/5">
       {OPTIONS.map((o) => (
         <button
           key={o.id}
@@ -21,7 +21,7 @@ export default function ThemeSwitch({ compact = false }: { compact?: boolean }) 
           title={`${o.label} theme`}
           onClick={() => setTheme(o.id)}
           className={`flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
-            pref === o.id ? 'bg-white text-green-700 shadow-sm dark:bg-slate-600 dark:text-white' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+            pref === o.id ? 'bg-white text-green-700 shadow-sm dark:bg-accent dark:text-accent-ink' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
           }`}
         >
           <o.icon size={16} />

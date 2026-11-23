@@ -25,7 +25,7 @@ export default function History({ s, readOnly }: { s: Session; readOnly?: boolea
       {!readOnly && list.length > 0 && <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Tap a game to fix the winner or score, or to delete it.</p>}
       {note && <div role="status" className="mb-3 rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
       {list.length === 0 ? (
-        <Empty title="No games yet" hint="Finished games will show up here." />
+        <Empty scene="games" title="No games yet" hint="Tap Won on a court when a game ends and it will show up here." />
       ) : (
         <ul className="space-y-2">
           {list.map((m) => {

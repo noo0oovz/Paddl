@@ -26,7 +26,7 @@ export function isDark(p: ThemePref = pref): boolean {
 export function applyTheme() {
   const dark = isDark()
   document.documentElement.classList.toggle('dark', dark)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#020617' : '#16a34a')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#05070d' : '#eef2fa')
 }
 
 export function setTheme(p: ThemePref) {

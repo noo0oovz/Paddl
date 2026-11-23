@@ -8,7 +8,7 @@ export function medal(i: number): string {
 
 export default function Standings({ s }: { s: Session }) {
   const rows = standings(s)
-  if (!s.players.length) return <Empty title="No players" />
+  if (!s.players.length) return <Empty scene="players" title="No players yet" hint="Open Courts, then Players, to add some." />
   const played = s.matches.length > 0
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-6">
