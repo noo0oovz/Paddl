@@ -468,7 +468,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
   return (
     <section key={next ? [...next.a, ...(next.b ?? [])].join() : 'none'} className="card paddl-in border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
       <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">Next match</h2>
+        <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">{s.config.mode === 'mystery' ? 'Next match (a surprise: teams are re-mixed when it starts)' : 'Next match'}</h2>
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-slate-500 sm:inline">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
           {next && (
@@ -507,6 +507,9 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
           </>
         )
       })()}
+      {next && waiting <= need && (
+        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Nobody extra is waiting, so there is no one to swap in yet. Tap a name to make someone play next or pull a player in.</p>
+      )}
       {next && upcoming[1] && (
         <p className="mt-2 truncate text-xs text-slate-500">
           Then: {join(upcoming[1].a.map((id) => nameOf(s, id)))}

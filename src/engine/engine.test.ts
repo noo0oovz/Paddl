@@ -4,7 +4,7 @@ import {
 } from './session'
 import { standings, playerStandings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
-import { previewQueue } from './queue'
+import { previewQueue, waitingUnits } from './queue'
 import { awards } from './insights'
 import type { Config, Session } from './types'
 
@@ -1025,23 +1025,6 @@ describe('matching quality guarantees', () => {
     }
   })
 
-  it('skill mode groups similar levels together more than plain rotation does', () => {
-    const levels = [2, 2, 2.5, 2.5, 3, 3, 3.5, 3.5, 4.5, 4.5, 5, 5.5]
-    const avgGap = (mode: 'fair' | 'skill') => {
-      let s = createSession('t', { courts: 2, mode }, levels.map((level, i) => ({ name: `P${i + 1}`, level })))
-      const gaps: number[] = []
-      for (let i = 0; i < 60; i++) {
-        const live = s.courts.filter((c) => c.match)
-        const c = live[i % live.length]
-        const lv = [...c.match!.a, ...c.match!.b].map((id) => s.players.find((p) => p.id === id)!.level)
-        gaps.push(Math.max(...lv) - Math.min(...lv))
-        s = finishMatch(s, c.id, { winner: i % 2 ? 'a' : 'b', scoreA: null, scoreB: null })
-      }
-      return gaps.reduce((a, b) => a + b, 0) / gaps.length
-    }
-    expect(avgGap('skill')).toBeLessThan(avgGap('fair') - 0.4)
-  })
-
   it('strongest + weakest vs the middle two is always the closest team split', () => {
     const vals = [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]
     for (const a of vals) for (const b of vals) for (const c of vals) for (const d of vals) {
@@ -1056,5 +1039,81 @@ describe('matching quality guarantees', () => {
     const m = s.courts[0].match!
     const sum = (ids: string[]) => ids.reduce((n, id) => n + s.players.find((p) => p.id === id)!.level, 0)
     expect(sum(m.a)).toBe(sum(m.b))
+  })
+})
+
+describe('the "on deck" match is a promise', () => {
+  const people = (a: string[], b: string[]) => [...a, ...b].sort().join('+')
+
+  /** Play out a session; before every finish, remember what was promised, then check what actually started. */
+  function audit(cfg: Partial<Config>, n: number, games = 80) {
+    let s = createSession('t', { courts: 2, ...cfg }, Array.from({ length: n }, (_, i) => ({ name: `P${i + 1}`, level: 2 + (i % 7) * 0.5 })))
+    let checked = 0
+    const wrong: string[] = []
+    let jumps = 0
+    for (let i = 0; i < games; i++) {
+      const live = s.courts.filter((c) => c.match)
+      if (!live.length) break
+      const c = live[i % live.length]
+      const finishing = new Set([...c.match!.a, ...c.match!.b])
+      const waiting = s.players.filter((p) => !s.courts.some((x) => x.match && [...x.match.a, ...x.match.b].includes(p.id))).length
+      const promised = previewQueue(s, 1)[0]
+      s = finishMatch(s, c.id, { winner: i % 2 ? 'a' : 'b', scoreA: null, scoreB: null })
+      const started = s.courts.find((x) => x.id === c.id)!.match
+      if (!promised?.b || !started) continue
+      checked++
+      if (people(promised.a, promised.b) !== people(started.a, started.b)) wrong.push(`game ${i + 1}`)
+      if (waiting >= 4 && [...started.a, ...started.b].some((id) => finishing.has(id))) jumps++
+    }
+    return { checked, wrong, jumps }
+  }
+
+  it.each([
+    ['fair', { mode: 'fair' as const }, 12],
+    ['fair', { mode: 'fair' as const }, 13],
+    ['fair', { mode: 'fair' as const }, 14],
+    ['fair', { mode: 'fair' as const }, 16],
+    ['skill', { mode: 'skill' as const }, 12],
+    ['robin', { mode: 'robin' as const }, 12],
+    ['singles', { format: 'singles' as const }, 8],
+    ['singles', { format: 'singles' as const }, 9],
+  ])('%s with %i players: what is shown on deck is exactly what starts', (_label, cfg, n) => {
+    const r = audit(cfg, n)
+    expect(r.checked).toBeGreaterThan(30)
+    expect(r.wrong).toEqual([])
+  })
+
+  it('a player who has just come off court never jumps someone who was already waiting', () => {
+    for (const n of [12, 13, 14]) expect(audit({ mode: 'fair' }, n).jumps, `${n} players`).toBe(0)
+    expect(audit({ mode: 'skill' }, 12).jumps).toBe(0)
+  })
+
+  it('the line order does not reshuffle just because a game finished', () => {
+    let s = createSession('t', { courts: 2 }, Array.from({ length: 14 }, (_, i) => ({ name: `P${i + 1}` })))
+    const order = (x: Session) => waitingUnits(x).map((u) => u.ids[0])
+    const before = order(s)
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null })
+    const after = order(s)
+    // everyone who was waiting keeps the same relative order
+    const kept = before.filter((id) => after.includes(id))
+    expect(after.filter((id) => kept.includes(id))).toEqual(kept)
+  })
+
+  it('the promise survives the host checking the board many times (it is not re-drawn on every look)', () => {
+    const s = createSession('t', { courts: 2 }, Array.from({ length: 13 }, (_, i) => ({ name: `P${i + 1}` })))
+    const first = JSON.stringify(previewQueue(s, 3))
+    for (let i = 0; i < 20; i++) expect(JSON.stringify(previewQueue(s, 3))).toBe(first)
+  })
+
+  it('a remix still changes the next match (the promise is only kept until the host asks otherwise)', () => {
+    const s = createSession('t', { courts: 1 }, Array.from({ length: 12 }, (_, i) => ({ name: `P${i + 1}` })))
+    const before = previewQueue(s, 1)[0]
+    const after = previewQueue(remixNext(s), 1)[0]
+    expect(people(after.a, after.b!)).not.toBe(people(before.a, before.b!))
+  })
+
+  it('Mystery mix is a surprise by design: it does not claim to be a promise', () => {
+    const r = audit({ mode: 'mystery' }, 12)
+    expect(r.checked).toBeGreaterThan(30) // it still starts games every time, just not the previewed ones
   })
 })

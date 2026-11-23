@@ -72,7 +72,9 @@ export function availableUnits(s: Session, exclude: Set<string>, counts: Counts)
 
 /** Queue order: winners-stay is first-come-first-served; the rest favour fewest games, then longest wait. */
 export function sortUnits(s: Session, units: Unit[], mode: Mode): Unit[] {
-  const salt = `${Math.floor(s.seq)}:${s.remix ?? 0}`
+  // Stable between games: if this changed whenever a game finished, the order of the line (and so the match shown
+  // as "on deck") would reshuffle at the very moment it was supposed to start.
+  const salt = `${s.config.mode === 'mystery' ? Math.floor(s.seq) : 0}:${s.remix ?? 0}`
   const tie = (x: Unit, y: Unit) => hash(x.key + salt) - hash(y.key + salt)
   return [...units].sort(
     (x, y) =>
@@ -111,6 +113,11 @@ const WEIGHTS: Record<Mode, { partner: number; opp: number; skill: number; squar
 }
 
 /** Randomised, wider-pool drawing: used after a host remix and for Mystery mix. */
+/** Seed for choices that should stay the same between games: only Mystery mix wants a fresh draw every game. */
+function seedOf(s: Session): number {
+  return s.config.mode === 'mystery' ? Math.floor(s.seq) : 0
+}
+
 function shuffly(s: Session): boolean {
   return !!s.fresh || s.config.mode === 'mystery'
 }
@@ -133,7 +140,7 @@ function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
   }
   // Tiny deterministic jitter so equal options do not always pick the sign-up order.
   // After a host remix the jitter is strong enough to break out of the "best" (repeating) split.
-  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq) + ':' + (s.remix ?? 0)) * (shuffly(s) ? 5 : 0.4)
+  cost += hash(aIds.join() + '/' + bIds.join() + ':' + seedOf(s) + ':' + (s.remix ?? 0)) * (shuffly(s) ? 5 : 0.4)
   return cost
 }
 
@@ -180,10 +187,18 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
     // Everyone with fewer games than the cut-off is guaranteed a spot; the rest is chosen among ties.
     const cutoff = normal[r - 1].games
     const must = normal.filter((u) => u.games < cutoff)
-    // A remix also considers players one game ahead, so the line-up can really change.
-    const tied = normal.filter((u) => (shuffly(s) ? u.games <= cutoff + 1 : u.games === cutoff)).filter((u) => u.games >= cutoff).slice(0, 9)
+    const needed = r - must.length
+    let tied = normal.filter((u) => u.games >= cutoff && (shuffly(s) ? u.games <= cutoff + 1 : u.games === cutoff))
+    if (!shuffly(s)) {
+      // Waiting longer beats variety. Among players on the same number of games, only those who have waited at least
+      // as long as the last person who would get in are eligible, so someone who has just come off court can never
+      // be picked ahead of someone who was already waiting (that is what made the "on deck" match change).
+      const lastIn = tied[needed - 1]
+      if (lastIn) tied = tied.filter((u) => u.last <= lastIn.last)
+    }
+    tied = tied.slice(0, 9)
     rankOf = (u) => (shuffly(s) ? 0 : tied.indexOf(u))
-    candidates = combos(tied, r - must.length).map((c) => [...front, ...must, ...c])
+    candidates = combos(tied, needed).map((c) => [...front, ...must, ...c])
   }
 
   let best: { cost: number; a: Unit[]; b: Unit[] } | null = null
@@ -208,7 +223,7 @@ export function proposeChallengers(s: Session, exclude: Set<string>, counts = co
   let best = pool[0]
   let bestN = Infinity
   for (const u of pool) {
-    const n = (counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0) + (shuffly(s) ? hash(u.key + ':' + (s.remix ?? 0) + ':' + Math.floor(s.seq)) * 3 : 0)
+    const n = (counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0) + (shuffly(s) ? hash(u.key + ':' + (s.remix ?? 0) + ':' + seedOf(s)) * 3 : 0)
     if (n < bestN) { bestN = n; best = u }
   }
   return [first.ids[0], best.ids[0]]

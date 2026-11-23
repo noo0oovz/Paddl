@@ -132,6 +132,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
           <aside className="space-y-4">
             <section className="rounded-3xl border border-amber-400/40 bg-amber-400/[0.04] p-5 shadow-[0_0_40px_-18px_rgba(255,194,51,0.6)]">
               <h2 className="mb-3 text-2xl font-black tracking-tight text-amber-300">⏭ ON DECK</h2>
+              {s.config.mode === 'mystery' && <p className="-mt-2 mb-3 text-sm font-semibold text-amber-200/80">Mystery mix: teams are a surprise when the game starts.</p>}
               {upcoming.length === 0 ? (
                 <p className="text-lg text-slate-400">{waiting.length === 0 ? '✅ Everyone is on court.' : 'Waiting for enough players.'}</p>
               ) : (

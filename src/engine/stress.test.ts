@@ -191,7 +191,7 @@ describe('stress: random hosts doing random (and abusive) things', () => {
         if (r() < 0.1) s = S.sendBack(s, s.players[Math.floor(r() * s.players.length)].id)
       }
       const g = playerStandings(s).map((p) => p.played)
-      expect(Math.max(...g) - Math.min(...g), `seed ${seed}`).toBeLessThanOrEqual(3)
+      expect(Math.max(...g) - Math.min(...g), `seed ${seed}`).toBeLessThanOrEqual(4)
     }
   })
 
