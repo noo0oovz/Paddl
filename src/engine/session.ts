@@ -1,0 +1,316 @@
+import {
+  DEFAULT_CONFIG, type Config, type Court, type Live, type Match, type Player, type Session, type Team,
+} from './types'
+import { busyIds, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
+import { countMatches, gamesOf, medianGames } from './stats'
+
+export const MIN_LEVEL = 2
+export const MAX_LEVEL = 5.5
+
+const clone = <T,>(x: T): T => structuredClone(x)
+const norm = (n: string) => n.trim().replace(/\s+/g, ' ')
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase()
+
+export function nameTaken(s: Session, name: string, exceptId?: string): boolean {
+  return s.players.some((p) => p.id !== exceptId && same(p.name, norm(name)))
+}
+
+function newId(s: Session, prefix: string): string {
+  return `${prefix}${s.nextId++}`
+}
+
+function addPlayerRaw(s: Session, name: string, level: number): Player {
+  const p: Player = {
+    id: newId(s, 'p'),
+    name: norm(name),
+    level: Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, level)),
+    status: 'active',
+    baseGames: 0,
+    lastPlayed: s.seq,
+    intervals: [[s.seq, null]],
+  }
+  s.players.push(p)
+  return p
+}
+
+function makeCourt(s: Session, n: number): Court {
+  return { id: newId(s, 'c'), name: `Court ${n}`, match: null, hold: null }
+}
+
+export interface NewPlayer {
+  name: string
+  level?: number
+}
+
+export function createSession(
+  name: string,
+  config: Partial<Config>,
+  players: NewPlayer[],
+  pairs: [NewPlayer, NewPlayer][] = [],
+): Session {
+  const cfg = { ...DEFAULT_CONFIG, ...config }
+  const s: Session = {
+    id: `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    name: norm(name) || 'Open play',
+    createdAt: Date.now(),
+    endedAt: null,
+    config: cfg,
+    players: [],
+    teams: [],
+    courts: [],
+    matches: [],
+    seq: 0,
+    nextId: 1,
+  }
+  for (let i = 1; i <= cfg.courts; i++) s.courts.push(makeCourt(s, i))
+  if (cfg.format === 'teams') {
+    for (const [x, y] of pairs) addTeamRaw(s, x, y)
+  } else {
+    for (const p of players) if (norm(p.name) && !nameTaken(s, p.name)) addPlayerRaw(s, p.name, p.level ?? 3.5)
+  }
+  return fill(s)
+}
+
+function addTeamRaw(s: Session, x: NewPlayer, y: NewPlayer): Team | null {
+  if (!norm(x.name) || !norm(y.name) || same(norm(x.name), norm(y.name))) return null
+  if (nameTaken(s, x.name) || nameTaken(s, y.name)) return null
+  const a = addPlayerRaw(s, x.name, x.level ?? 3.5)
+  const b = addPlayerRaw(s, y.name, y.level ?? 3.5)
+  const t: Team = { id: newId(s, 't'), name: `${a.name} & ${b.name}`, playerIds: [a.id, b.id] }
+  s.teams.push(t)
+  return t
+}
+
+/** Start matches on every free court that can be filled. Safe to call after any change. */
+export function fill(input: Session): Session {
+  const s = input
+  if (s.endedAt) return s
+  const counts = countMatches(s.matches)
+  for (const court of s.courts) {
+    if (court.match) continue
+    const exclude = busyIds(s)
+    if (court.hold) {
+      const ch = proposeChallengers(s, exclude, counts)
+      if (!ch) continue
+      court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak }
+      court.hold = null
+    } else {
+      const m = proposeMatch(s, exclude, counts)
+      if (!m) continue
+      court.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
+    }
+  }
+  return s
+}
+
+function mutate(s: Session, fn: (draft: Session) => void): Session {
+  const d = clone(s)
+  fn(d)
+  return fill(d)
+}
+
+function courtOf(s: Session, playerId: string): Court | undefined {
+  return s.courts.find((c) => c.match && [...c.match.a, ...c.match.b].includes(playerId))
+}
+
+function close(p: Player, seq: number) {
+  const last = p.intervals[p.intervals.length - 1]
+  if (last && last[1] === null) last[1] = seq
+}
+
+export function addPlayer(s: Session, name: string, level = 3.5): Session {
+  if (!norm(name) || nameTaken(s, name)) return s
+  return mutate(s, (d) => {
+    const p = addPlayerRaw(d, name, level)
+    if (d.config.lateJoinMedian) p.baseGames = medianGames(d, countMatches(d.matches), p.id)
+  })
+}
+
+export function addTeam(s: Session, x: NewPlayer, y: NewPlayer): Session {
+  return mutate(s, (d) => {
+    const t = addTeamRaw(d, x, y)
+    if (t && d.config.lateJoinMedian) {
+      const med = medianGames(d, countMatches(d.matches), t.playerIds[0])
+      for (const id of t.playerIds) d.players.find((p) => p.id === id)!.baseGames = med
+    }
+  })
+}
+
+export function renamePlayer(s: Session, id: string, name: string): Session {
+  if (!norm(name) || nameTaken(s, name, id)) return s
+  return mutate(s, (d) => {
+    const p = d.players.find((x) => x.id === id)
+    if (!p) return
+    p.name = norm(name)
+    for (const t of d.teams) {
+      if (t.playerIds.includes(id)) t.name = t.playerIds.map((pid) => d.players.find((x) => x.id === pid)!.name).join(' & ')
+    }
+  })
+}
+
+export function setLevel(s: Session, id: string, level: number): Session {
+  return mutate(s, (d) => {
+    const p = d.players.find((x) => x.id === id)
+    if (p) p.level = Math.min(MAX_LEVEL, Math.max(MIN_LEVEL, level))
+  })
+}
+
+/** Free a player from any court/hold: swap in the next waiting player, or send the rest back to the queue. */
+function release(d: Session, id: string) {
+  for (const c of d.courts) {
+    if (c.hold?.ids.includes(id)) c.hold = null
+  }
+  const court = courtOf(d, id)
+  if (!court || !court.match) return
+  const m = court.match
+  if (d.config.format !== 'teams') {
+    const sub = waitingUnits(d).find((u) => !u.ids.includes(id))
+    if (sub) {
+      const swap = (ids: string[]) => ids.map((x) => (x === id ? sub.ids[0] : x))
+      court.match = { ...m, a: swap(m.a), b: swap(m.b) }
+      return
+    }
+  }
+  court.match = null // not enough people to continue: the others go back to the queue
+}
+
+export function setStatus(s: Session, id: string, status: Player['status']): Session {
+  return mutate(s, (d) => {
+    const p = d.players.find((x) => x.id === id)
+    if (!p || p.status === status) return
+    const wasActive = p.status === 'active'
+    if (wasActive) {
+      p.status = status
+      close(p, d.seq)
+      release(d, id)
+      if (d.config.format === 'teams') {
+        // A fixed team cannot play short: take the partner out of any hold too.
+        const t = d.teams.find((x) => x.playerIds.includes(id))
+        if (t) for (const c of d.courts) if (c.hold && t.playerIds.some((pid) => c.hold!.ids.includes(pid))) c.hold = null
+      }
+    } else {
+      p.status = status
+      if (status === 'active') {
+        p.intervals.push([d.seq, null])
+        p.lastPlayed = d.seq
+        if (d.config.lateJoinMedian) {
+          const counts = countMatches(d.matches)
+          p.baseGames = Math.max(p.baseGames, medianGames(d, counts, p.id) - (counts.games.get(p.id) ?? 0))
+        }
+      }
+    }
+  })
+}
+
+/** Replace one player on a live court with another waiting player. */
+export function substitute(s: Session, courtId: string, outId: string, inId: string): Session {
+  return mutate(s, (d) => {
+    const c = d.courts.find((x) => x.id === courtId)
+    if (!c?.match || busyIds(d).has(inId)) return
+    const swap = (ids: string[]) => ids.map((x) => (x === outId ? inId : x))
+    c.match = { ...c.match, a: swap(c.match.a), b: swap(c.match.b) }
+  })
+}
+
+/** Abandon the game on a court without recording it; everyone returns to the queue. */
+export function cancelMatch(s: Session, courtId: string): Session {
+  return mutate(s, (d) => {
+    const c = d.courts.find((x) => x.id === courtId)
+    if (!c?.match) return
+    const ids = [...c.match.a, ...c.match.b]
+    c.match = null
+    c.hold = null
+    for (const p of d.players) if (ids.includes(p.id)) p.lastPlayed = d.seq
+  })
+}
+
+export interface Result {
+  winner: 'a' | 'b' | null
+  scoreA: number | null
+  scoreB: number | null
+}
+
+export function finishMatch(s: Session, courtId: string, r: Result): Session {
+  return mutate(s, (d) => {
+    const c = d.courts.find((x) => x.id === courtId)
+    if (!c?.match) return
+    const live: Live = c.match
+    d.seq += 1
+    const rec: Match = {
+      id: newId(d, 'm'), seq: d.seq, court: c.name, a: live.a, b: live.b,
+      scoreA: r.scoreA, scoreB: r.scoreB, winner: r.winner, at: Date.now(),
+    }
+    d.matches.push(rec)
+    c.match = null
+    for (const p of d.players) if ([...live.a, ...live.b].includes(p.id)) p.lastPlayed = d.seq
+    if (d.config.mode === 'winners' && r.winner) {
+      const streak = (r.winner === 'a' ? live.streak : 0) + 1
+      if (streak < d.config.maxStreak) c.hold = { ids: r.winner === 'a' ? live.a : live.b, streak }
+    }
+  })
+}
+
+export function editMatch(s: Session, id: string, r: Result): Session {
+  return mutate(s, (d) => {
+    const m = d.matches.find((x) => x.id === id)
+    if (m) Object.assign(m, r)
+  })
+}
+
+export function deleteMatch(s: Session, id: string): Session {
+  return mutate(s, (d) => {
+    d.matches = d.matches.filter((m) => m.id !== id)
+  })
+}
+
+export function setCourts(s: Session, count: number): Session {
+  return mutate(s, (d) => {
+    const n = Math.max(1, Math.min(12, count))
+    while (d.courts.length < n) d.courts.push(makeCourt(d, d.courts.length + 1))
+    // Only remove empty courts, from the end, so no live game is lost.
+    while (d.courts.length > n) {
+      const last = d.courts[d.courts.length - 1]
+      if (last.match) break
+      d.courts.pop()
+    }
+    d.config.courts = d.courts.length
+  })
+}
+
+export function setConfig(s: Session, patch: Partial<Config>): Session {
+  return mutate(s, (d) => {
+    // Format is fixed once play starts (use setMode for the queue mode); only game rules change here.
+    const { target, winBy2, cap, maxStreak, lateJoinMedian } = { ...d.config, ...patch }
+    Object.assign(d.config, { target, winBy2, cap, maxStreak, lateJoinMedian })
+  })
+}
+
+export function setMode(s: Session, mode: Config['mode']): Session {
+  return mutate(s, (d) => {
+    d.config.mode = mode
+    for (const c of d.courts) c.hold = null
+  })
+}
+
+export function endSession(s: Session): Session {
+  const d = clone(s)
+  d.endedAt = Date.now()
+  for (const c of d.courts) { c.match = null; c.hold = null }
+  for (const p of d.players) close(p, d.seq)
+  return d
+}
+
+export function sessionReady(cfg: Config, playerCount: number, pairCount: number): string | null {
+  const units = cfg.format === 'teams' ? pairCount : playerCount
+  const need = unitsNeeded(cfg.format)
+  if (units < need) {
+    return cfg.format === 'teams' ? `Add at least ${need} teams` : `Add at least ${need} players`
+  }
+  return null
+}
+
+export function waitingCount(s: Session): number {
+  return waitingUnits(s).reduce((n, u) => n + u.ids.length, 0)
+}
+
+export { gamesOf }

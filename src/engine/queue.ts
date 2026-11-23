@@ -1,0 +1,204 @@
+import type { Format, Mode, Player, Session } from './types'
+import { countMatches, gamesOf, pairKey, type Counts } from './stats'
+
+/** A schedulable unit: one player, or a fixed team. */
+export interface Unit {
+  ids: string[]
+  games: number
+  last: number
+  level: number
+  key: string
+}
+
+export interface Proposal {
+  a: string[]
+  b: string[]
+}
+
+export function unitsNeeded(f: Format): number {
+  return f === 'doubles' ? 4 : 2
+}
+
+/** Players currently on a court or holding one (not available to the queue). */
+export function busyIds(s: Session): Set<string> {
+  const set = new Set<string>()
+  for (const c of s.courts) {
+    if (c.match) for (const id of [...c.match.a, ...c.match.b]) set.add(id)
+    if (c.hold) for (const id of c.hold.ids) set.add(id)
+  }
+  return set
+}
+
+function hash(str: string): number {
+  let x = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    x ^= str.charCodeAt(i)
+    x = Math.imul(x, 16777619)
+  }
+  return ((x >>> 0) % 1000) / 1000
+}
+
+export function availableUnits(s: Session, exclude: Set<string>, counts: Counts): Unit[] {
+  const ok = (p: Player | undefined): p is Player => !!p && p.status === 'active' && !exclude.has(p.id)
+  const byId = new Map(s.players.map((p) => [p.id, p]))
+  if (s.config.format === 'teams') {
+    const out: Unit[] = []
+    for (const t of s.teams) {
+      const ps = t.playerIds.map((id) => byId.get(id))
+      if (!ps.every(ok)) continue
+      const live = ps as Player[]
+      out.push({
+        ids: [...t.playerIds],
+        games: Math.max(...live.map((p) => gamesOf(p, counts))),
+        last: Math.max(...live.map((p) => p.lastPlayed)),
+        level: live[0].level + live[1].level,
+        key: t.id,
+      })
+    }
+    return out
+  }
+  return s.players
+    .filter((p) => ok(p))
+    .map((p) => ({ ids: [p.id], games: gamesOf(p, counts), last: p.lastPlayed, level: p.level, key: p.id }))
+}
+
+/** Queue order: winners-stay is first-come-first-served; the rest favour fewest games, then longest wait. */
+export function sortUnits(s: Session, units: Unit[], mode: Mode): Unit[] {
+  const salt = String(Math.floor(s.seq))
+  const tie = (x: Unit, y: Unit) => hash(x.key + salt) - hash(y.key + salt)
+  return [...units].sort((x, y) =>
+    mode === 'winners'
+      ? x.last - y.last || x.games - y.games || tie(x, y)
+      : x.games - y.games || x.last - y.last || tie(x, y),
+  )
+}
+
+/** The waiting line, in the order players will be picked. */
+export function waitingUnits(s: Session): Unit[] {
+  const counts = countMatches(s.matches)
+  return sortUnits(s, availableUnits(s, busyIds(s), counts), s.config.mode)
+}
+
+function combos<T>(arr: T[], k: number): T[][] {
+  if (k === 0) return [[]]
+  if (arr.length < k) return []
+  const out: T[][] = []
+  const rec = (start: number, cur: T[]) => {
+    if (cur.length === k) { out.push([...cur]); return }
+    for (let i = start; i < arr.length; i++) { cur.push(arr[i]); rec(i + 1, cur); cur.pop() }
+  }
+  rec(0, [])
+  return out
+}
+
+const WEIGHTS: Record<Mode, { partner: number; opp: number; skill: number; square: boolean }> = {
+  fair: { partner: 10, opp: 3, skill: 0, square: false },
+  winners: { partner: 10, opp: 3, skill: 0, square: false },
+  skill: { partner: 4, opp: 1, skill: 25, square: false },
+  robin: { partner: 10, opp: 8, skill: 0, square: true },
+}
+
+function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
+  const w = WEIGHTS[s.config.mode]
+  const pen = (c: number) => (w.square ? c * c : c)
+  let cost = 0
+  if (s.config.format === 'doubles') {
+    cost += w.partner * pen(counts.partner.get(pairKey(A[0].ids[0], A[1].ids[0])) ?? 0)
+    cost += w.partner * pen(counts.partner.get(pairKey(B[0].ids[0], B[1].ids[0])) ?? 0)
+  }
+  const aIds = A.flatMap((u) => u.ids)
+  const bIds = B.flatMap((u) => u.ids)
+  for (const x of aIds) for (const y of bIds) cost += w.opp * pen(counts.opp.get(pairKey(x, y)) ?? 0)
+  if (w.skill) {
+    const la = A.reduce((n, u) => n + u.level, 0)
+    const lb = B.reduce((n, u) => n + u.level, 0)
+    cost += w.skill * Math.abs(la - lb)
+  }
+  // Tiny deterministic jitter so equal options do not always pick the sign-up order.
+  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq)) * 0.4
+  return cost
+}
+
+function splitsOf<T>(set: T[], format: Format): [T[], T[]][] {
+  if (format === 'doubles') {
+    return [
+      [[set[0], set[1]], [set[2], set[3]]],
+      [[set[0], set[2]], [set[1], set[3]]],
+      [[set[0], set[3]], [set[1], set[2]]],
+    ]
+  }
+  return [[[set[0]], [set[1]]]]
+}
+
+/** Pick the next full match from the available units, or null if there are not enough. */
+export function proposeMatch(s: Session, exclude: Set<string>, counts = countMatches(s.matches)): Proposal | null {
+  const need = unitsNeeded(s.config.format)
+  const units = sortUnits(s, availableUnits(s, exclude, counts), s.config.mode)
+  if (units.length < need) return null
+
+  let candidates: Unit[][]
+  let rankOf = (_: Unit) => 0
+  if (s.config.mode === 'winners') {
+    candidates = [units.slice(0, need)]
+  } else {
+    // Everyone with fewer games than the cut-off is guaranteed a spot; the rest is chosen among ties.
+    const cutoff = units[need - 1].games
+    const must = units.filter((u) => u.games < cutoff)
+    const tied = units.filter((u) => u.games === cutoff).slice(0, 8)
+    rankOf = (u) => tied.indexOf(u)
+    candidates = combos(tied, need - must.length).map((c) => [...must, ...c])
+  }
+
+  let best: { cost: number; a: Unit[]; b: Unit[] } | null = null
+  for (const set of candidates) {
+    const rank = set.reduce((n, u) => n + Math.max(0, rankOf(u)), 0)
+    for (const [A, B] of splitsOf(set, s.config.format)) {
+      const cost = rank + splitCost(s, counts, A, B)
+      if (!best || cost < best.cost) best = { cost, a: A, b: B }
+    }
+  }
+  if (!best) return null
+  return { a: best.a.flatMap((u) => u.ids), b: best.b.flatMap((u) => u.ids) }
+}
+
+/** Winners stay: the next challengers (one team) for a holding side. */
+export function proposeChallengers(s: Session, exclude: Set<string>, counts = countMatches(s.matches)): string[] | null {
+  const units = sortUnits(s, availableUnits(s, exclude, counts), 'winners')
+  if (s.config.format !== 'doubles') return units.length ? units[0].ids : null
+  if (units.length < 2) return null
+  const first = units[0]
+  const pool = units.slice(1, 4)
+  let best = pool[0]
+  let bestN = Infinity
+  for (const u of pool) {
+    const n = counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0
+    if (n < bestN) { bestN = n; best = u }
+  }
+  return [first.ids[0], best.ids[0]]
+}
+
+export interface Preview {
+  a: string[]
+  b: string[] | null // null = challengers only (winners stay)
+}
+
+/** What the next few matches will look like once courts free up. */
+export function previewQueue(s: Session, count: number): Preview[] {
+  const counts = countMatches(s.matches)
+  const excl = busyIds(s)
+  const out: Preview[] = []
+  while (out.length < count) {
+    if (s.config.mode === 'winners') {
+      const ch = proposeChallengers(s, excl, counts)
+      if (!ch) break
+      out.push({ a: ch, b: null })
+      ch.forEach((id) => excl.add(id))
+    } else {
+      const m = proposeMatch(s, excl, counts)
+      if (!m) break
+      out.push(m)
+      for (const id of [...m.a, ...m.b]) excl.add(id)
+    }
+  }
+  return out
+}

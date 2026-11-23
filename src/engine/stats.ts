@@ -1,0 +1,170 @@
+import type { Match, Player, Session } from './types'
+
+export function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
+export interface Counts {
+  games: Map<string, number>
+  partner: Map<string, number>
+  opp: Map<string, number>
+}
+
+export function countMatches(matches: Match[]): Counts {
+  const games = new Map<string, number>()
+  const partner = new Map<string, number>()
+  const opp = new Map<string, number>()
+  const inc = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1)
+  for (const m of matches) {
+    for (const id of [...m.a, ...m.b]) inc(games, id)
+    for (const side of [m.a, m.b]) if (side.length === 2) inc(partner, pairKey(side[0], side[1]))
+    for (const x of m.a) for (const y of m.b) inc(opp, pairKey(x, y))
+  }
+  return { games, partner, opp }
+}
+
+export function gamesOf(p: Player, counts: Counts): number {
+  return p.baseGames + (counts.games.get(p.id) ?? 0)
+}
+
+/** Median games played among active players (places late joiners fairly). */
+export function medianGames(s: Session, counts: Counts = countMatches(s.matches), excludeId?: string): number {
+  const g = s.players
+    .filter((p) => p.status === 'active' && p.id !== excludeId)
+    .map((p) => gamesOf(p, counts))
+    .sort((x, y) => x - y)
+  if (!g.length) return 0
+  return g[Math.floor((g.length - 1) / 2)]
+}
+
+export interface PlayerStat {
+  id: string
+  name: string
+  status: Player['status']
+  played: number
+  wins: number
+  losses: number
+  pf: number
+  pa: number
+  diff: number
+  winPct: number
+  eligible: number // games finished while the player was active
+  satOut: number
+  longestStreak: number
+}
+
+export function standings(s: Session): PlayerStat[] {
+  const ordered = [...s.matches].sort((x, y) => x.seq - y.seq)
+  const stats = new Map<string, PlayerStat>()
+  const run = new Map<string, number>()
+  for (const p of s.players) {
+    stats.set(p.id, {
+      id: p.id, name: p.name, status: p.status, played: 0, wins: 0, losses: 0,
+      pf: 0, pa: 0, diff: 0, winPct: 0, eligible: 0, satOut: 0, longestStreak: 0,
+    })
+    run.set(p.id, 0)
+  }
+  for (const m of ordered) {
+    for (const side of ['a', 'b'] as const) {
+      const mine = side === 'a' ? m.a : m.b
+      const forPts = side === 'a' ? m.scoreA : m.scoreB
+      const againstPts = side === 'a' ? m.scoreB : m.scoreA
+      for (const id of mine) {
+        const st = stats.get(id)
+        if (!st) continue
+        st.played++
+        if (m.winner === null) continue
+        if (m.winner === side) {
+          st.wins++
+          const r = (run.get(id) ?? 0) + 1
+          run.set(id, r)
+          if (r > st.longestStreak) st.longestStreak = r
+        } else {
+          st.losses++
+          run.set(id, 0)
+        }
+        if (forPts !== null && againstPts !== null) {
+          st.pf += forPts
+          st.pa += againstPts
+        }
+      }
+    }
+  }
+  for (const p of s.players) {
+    const st = stats.get(p.id)!
+    const eligible = s.matches.filter((m) => p.intervals.some(([from, to]) => m.seq > from && (to === null || m.seq <= to))).length
+    st.eligible = Math.max(eligible, st.played)
+    st.satOut = st.eligible - st.played
+    st.diff = st.pf - st.pa
+    const decided = st.wins + st.losses
+    st.winPct = decided ? st.wins / decided : 0
+  }
+  // Rank by a smoothed win rate so a lucky 1-0 does not outrank a solid 5-1.
+  // Players with no decided games always rank below anyone who has played one.
+  const rank = (x: PlayerStat) => (x.wins + x.losses === 0 ? -1 : (x.wins + 1) / (x.wins + x.losses + 2))
+  return [...stats.values()].sort(
+    (x, y) => rank(y) - rank(x) || y.diff - x.diff || y.wins - x.wins || y.played - x.played || x.name.localeCompare(y.name),
+  )
+}
+
+export interface Duo {
+  ids: [string, string]
+  wins: number
+  losses: number
+}
+
+export interface Summary {
+  matches: number
+  totalPoints: number
+  durationMs: number
+  biggestWin: Match | null
+  bestDuo: Duo | null
+  mostGames: PlayerStat | null
+  hotStreak: PlayerStat | null
+}
+
+export function summarize(s: Session): Summary {
+  const st = standings(s)
+  let biggest: Match | null = null
+  let bigMargin = -1
+  let totalPoints = 0
+  for (const m of s.matches) {
+    if (m.scoreA === null || m.scoreB === null || !m.winner) continue
+    const margin = Math.abs(m.scoreA - m.scoreB)
+    totalPoints += m.scoreA + m.scoreB
+    if (margin > bigMargin) { bigMargin = margin; biggest = m }
+  }
+  const duos = new Map<string, Duo>()
+  for (const m of s.matches) {
+    if (!m.winner) continue
+    for (const side of ['a', 'b'] as const) {
+      const ids = side === 'a' ? m.a : m.b
+      if (ids.length !== 2) continue
+      const k = pairKey(ids[0], ids[1])
+      const d = duos.get(k) ?? { ids: [ids[0], ids[1]] as [string, string], wins: 0, losses: 0 }
+      if (m.winner === side) d.wins++
+      else d.losses++
+      duos.set(k, d)
+    }
+  }
+  const bestDuo =
+    [...duos.values()]
+      .filter((d) => d.wins + d.losses >= 2 && d.wins > 0)
+      .sort((x, y) => y.wins / (y.wins + y.losses) - x.wins / (x.wins + x.losses) || y.wins - x.wins)[0] ?? null
+  const mostGames = [...st].sort((x, y) => y.played - x.played)[0] ?? null
+  const hot = [...st].sort((x, y) => y.longestStreak - x.longestStreak)[0] ?? null
+  const end = s.endedAt ?? Date.now()
+  return {
+    matches: s.matches.length,
+    totalPoints,
+    durationMs: Math.max(0, end - s.createdAt),
+    biggestWin: biggest,
+    bestDuo,
+    mostGames: mostGames && mostGames.played > 0 ? mostGames : null,
+    hotStreak: hot && hot.longestStreak >= 2 ? hot : null,
+  }
+}
+
+export function nameOf(s: Session, id: string): string {
+  return s.players.find((p) => p.id === id)?.name ?? '?'
+}
