@@ -1,5 +1,5 @@
 import {
-  DEFAULT_CONFIG, type Config, type Court, type Live, type Match, type Player, type Session, type Team,
+  DEFAULT_CONFIG, type Config, type Court, type CourtTag, type Live, type Match, type Player, type Session, type Team,
 } from './types'
 import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
@@ -65,6 +65,7 @@ export function createSession(
     nextId: 1,
   }
   for (let i = 1; i <= cfg.courts; i++) s.courts.push(makeCourt(s, i))
+  if (cfg.challengerCourt && cfg.mode !== 'winners') s.courts[0].tags = ['challenger']
   if (cfg.format === 'teams') {
     for (const [x, y] of pairs) addTeamRaw(s, x, y)
   } else {
@@ -81,6 +82,24 @@ function addTeamRaw(s: Session, x: NewPlayer, y: NewPlayer): Team | null {
   const t: Team = { id: newId(s, 't'), name: `${a.name} & ${b.name}`, playerIds: [a.id, b.id] }
   s.teams.push(t)
   return t
+}
+
+/** True when winners stay on this court: the whole session is winners-stay, or this court is tagged Challenger. */
+export function isKing(s: Session, c: Court): boolean {
+  return s.config.mode === 'winners' || !!c.tags?.includes('challenger')
+}
+
+/** Show or hide a rule badge on a court. Tagging a court Challenger makes winners stay there; clearing it releases the holders. */
+export function toggleCourtTag(s: Session, courtId: string, tag: CourtTag): Session {
+  return mutate(s, (d) => {
+    const c = d.courts.find((x) => x.id === courtId)
+    if (!c) return
+    const tags = new Set(c.tags ?? [])
+    if (tags.has(tag)) tags.delete(tag)
+    else tags.add(tag)
+    c.tags = [...tags]
+    if (tag === 'challenger' && !tags.has('challenger') && d.config.mode !== 'winners') c.hold = null
+  })
 }
 
 /** Start matches on every free court that can be filled. Safe to call after any change. */
@@ -150,7 +169,7 @@ export function remixCourt(s: Session, courtId: string): Session {
   if (!c?.match) return s
   const old = c.match
   const oldSig = matchSig(old.a, old.b)
-  const keep = d.config.mode === 'winners' && old.streak > 0 ? old.a : null
+  const keep = isKing(d, c) && old.streak > 0 ? old.a : null
   c.match = null
   const exclude = busyIds(d)
   if (keep) keep.forEach((id) => exclude.add(id))
@@ -385,8 +404,9 @@ export function finishMatch(s: Session, courtId: string, r: Result): Session {
     d.matches.push(rec)
     c.match = null
     for (const p of d.players) if ([...live.a, ...live.b].includes(p.id)) p.lastPlayed = d.seq
-    if (d.config.mode === 'winners' && r.winner) {
+    if (isKing(d, c) && r.winner) {
       const streak = (r.winner === 'a' ? live.streak : 0) + 1
+      rec.streak = streak
       if (streak < d.config.maxStreak) c.hold = { ids: r.winner === 'a' ? live.a : live.b, streak }
     }
   })

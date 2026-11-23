@@ -1,7 +1,8 @@
 import { forwardRef, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, Download, Share2, Trash2 } from 'lucide-react'
+import { ArrowLeft, Download, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
+import { awards, type Award } from '../engine/insights'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
 import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
 import { reopenSession } from '../engine/session'
@@ -37,6 +38,53 @@ function Frame({ s, title, children }: { s: Session; title: string; children: Re
     </>
   )
 }
+
+/** "Spotify Wrapped"-style recap: the champion, then playful awards. Always light, fixed width, for sharing. */
+export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function RecapCard({ s }, ref) {
+  const rows = standings(s)
+  const list = awards(s)
+  const sum = summarize(s)
+  const champ = rows[0] && rows[0].wins > 0 ? rows[0] : null
+  return (
+    <div ref={ref} style={{ width: 720, background: '#ffffff', color: C.ink, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}>
+      <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.dark})`, color: '#fff', padding: '30px 32px 26px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, opacity: 0.85 }}>PADDL · SESSION RECAP</div>
+        <div style={{ fontSize: 36, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
+        <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
+          {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
+        </div>
+        {champ && (
+          <div style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{ fontSize: 44 }}>🏆</div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>TOP OF THE LADDER</div>
+              <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>{champ.name}</div>
+              <div style={{ fontSize: 14, opacity: 0.9 }}>{champ.wins} {champ.wins === 1 ? 'win' : 'wins'} · {champ.losses} {champ.losses === 1 ? 'loss' : 'losses'}</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: '22px 32px 6px' }}>
+        {list.length === 0 && <div style={{ color: C.mute, fontSize: 15, padding: '8px 0 16px' }}>Play a few games and the awards will show up here.</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {list.map((a) => (
+            <div key={a.id} style={{ background: C.soft, borderRadius: 16, padding: '14px 16px', minWidth: 0 }}>
+              <div style={{ fontSize: 28, lineHeight: 1 }}>{a.emoji}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: C.mute, marginTop: 8 }}>{a.title.toUpperCase()}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{a.winner}</div>
+              <div style={{ fontSize: 13, color: C.mute, marginTop: 3 }}>{a.detail}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: '14px 32px 20px', color: C.mute, fontSize: 12, textAlign: 'center', borderTop: `1px solid ${C.line}`, marginTop: 14 }}>
+        Made with Paddl · {fmtTime(s.endedAt ?? Date.now())}
+      </div>
+    </div>
+  )
+})
 
 /** Fixed-width, always-light card that gets rendered to PNG. Inline styles keep it identical in any theme. */
 export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
@@ -156,6 +204,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
   const [msg, setMsg] = useState<string | null>(null)
   const sum = summarize(s)
   const top = standings(s).slice(0, 3)
+  const recapAwards: Award[] = awards(s)
 
   async function makeOne(part: Part): Promise<Blob> {
     const node = refs.current[part]
@@ -207,6 +256,27 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
     setMsg('Sharing is not available here, so the 3 images were saved instead.')
   }
 
+  const recapRef = useRef<HTMLDivElement>(null)
+  async function recap(share: boolean) {
+    if (!recapRef.current) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const blob = await renderPng(recapRef.current)
+      const name = fileName(s.name).replace(/\.png$/, '-recap.png')
+      if (share && canShareFile(blob, name)) {
+        try { await shareImage(blob, name, s.name + ' recap') } catch { download(blob, name); setMsg('Sharing is not available here, so the recap was saved instead.') }
+      } else {
+        download(blob, name)
+        setMsg('Recap saved.')
+      }
+    } catch {
+      setMsg('Could not create the recap. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function saveOne(part: Part, n: number) {
     setBusy(true)
     setMsg(null)
@@ -248,6 +318,30 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
         </div>
       )}
 
+      {recapAwards.length > 0 && (
+        <section className="mt-5">
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-extrabold"><Sparkles size={18} className="text-amber-500" /> Session awards</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {recapAwards.map((a) => (
+              <div key={a.id} className="card paddl-in flex items-start gap-3 p-3">
+                <div className="text-3xl leading-none">{a.emoji}</div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-bold tracking-widest text-slate-500 uppercase">{a.title}</div>
+                  <div className="font-extrabold break-words">{a.winner}</div>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">{a.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button className="btn-soft flex-1" onClick={() => recap(false)} disabled={busy}><Download size={16} /> Save recap card</button>
+            {typeof navigator !== 'undefined' && 'share' in navigator && (
+              <button className="btn-soft flex-1" onClick={() => recap(true)} disabled={busy}><Share2 size={16} /> Share recap</button>
+            )}
+          </div>
+        </section>
+      )}
+
       <div className="sticky top-0 z-10 -mx-4 mt-4 flex gap-2 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
         <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save images (3)'}</button>
         {typeof navigator !== 'undefined' && 'share' in navigator && (
@@ -270,6 +364,8 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
           </div>
         ))}
       </div>
+
+      <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, pointerEvents: 'none' }}><RecapCard ref={recapRef} s={s} /></div>
 
       <button className="btn-soft mt-6 w-full" onClick={() => updateActive((x) => reopenSession(x))}>
         Ended by mistake? Reopen this session

@@ -1,5 +1,13 @@
 export type Format = 'doubles' | 'singles' | 'teams'
-export type Mode = 'fair' | 'winners' | 'skill' | 'robin'
+export type Mode = 'fair' | 'winners' | 'skill' | 'robin' | 'mystery'
+export type CourtTag = 'fast' | 'beginner' | 'challenger' | 'windy'
+
+export const COURT_TAGS: Record<CourtTag, { label: string; emoji: string; hint: string }> = {
+  fast: { label: 'Fast / Rally', emoji: '⚡', hint: 'Quick games, keep it moving' },
+  beginner: { label: 'Beginner friendly', emoji: '🌱', hint: 'Relaxed pace, all levels welcome' },
+  challenger: { label: 'Challenger', emoji: '👑', hint: 'Winners stay on and streaks are announced' },
+  windy: { label: 'Windy / Sun side', emoji: '🌬️', hint: 'Tough conditions, swap ends often' },
+}
 export type Status = 'active' | 'resting' | 'left'
 
 export interface Config {
@@ -11,6 +19,7 @@ export interface Config {
   cap: number | null // hard score cap, null = none
   maxStreak: number // winners stay: max consecutive wins on a court
   lateJoinMedian: boolean // late joiners / returners start at the median games played
+  challengerCourt?: boolean // at session start, make Court 1 a challenger court
 }
 
 export interface Player {
@@ -48,6 +57,7 @@ export interface Court {
   name: string
   match: Live | null
   hold: Hold | null // winners stay: holders waiting for challengers
+  tags?: CourtTag[] // rule badges shown on the court card; "challenger" makes this court winners-stay
 }
 
 export interface Match {
@@ -59,6 +69,7 @@ export interface Match {
   scoreA: number | null
   scoreB: number | null
   winner: 'a' | 'b' | null
+  streak?: number // on a winners-stay / challenger court: how many in a row the winners now have
   at: number // when the game was recorded
   ms?: number // how long the game lasted on court (missing on games saved by older versions)
 }
@@ -95,6 +106,7 @@ export const MODE_INFO: Record<Mode, { label: string; blurb: string }> = {
   winners: { label: 'Winners stay', blurb: 'Winners hold the court up to a cap, losers go to the back.' },
   skill: { label: 'Skill balanced', blurb: 'Builds evenly matched teams from player levels.' },
   robin: { label: 'Round robin', blurb: 'Everyone partners and faces everyone as evenly as possible.' },
+  mystery: { label: 'Mystery mix', blurb: 'Surprise teams every game for social nights. Still fair on games played.' },
 }
 
 export const FORMAT_INFO: Record<Format, { label: string; blurb: string }> = {

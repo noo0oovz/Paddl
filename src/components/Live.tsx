@@ -1,11 +1,14 @@
-import { useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Plus, Repeat2, Shuffle, Trophy, UserPlus, Users } from 'lucide-react'
-import type { Court, Session } from '../engine/types'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Tag, Trophy, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
+import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, gamesOf, nameOf } from '../engine/stats'
+import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
+import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
+import Board from './Board'
 import {
   addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, setCourts, setLevel,
-  setStatus, substitute, swapOutOfNext, nameTaken, type Result,
+  setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
 import { updateActive } from '../store'
@@ -19,6 +22,27 @@ export default function Live({ s }: { s: Session }) {
   const [subFor, setSubFor] = useState<{ court: string; id: string } | null>(null)
   const [waitFor, setWaitFor] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const [board, setBoard] = useState(false)
+  const [tagFor, setTagFor] = useState<string | null>(null)
+  const sound = useSound()
+
+  // Cues: a chime when a new match is locked in on a court, and a ping when a court hits the time mark.
+  const startedKey = s.courts.map((c) => (c.match ? c.match.startedAt : 0)).join(',')
+  const lastStarted = useRef(startedKey)
+  useEffect(() => {
+    if (lastStarted.current !== startedKey && s.courts.some((c) => c.match && Date.now() - c.match.startedAt < 4000)) chime('match')
+    lastStarted.current = startedKey
+  }, [startedKey, s.courts])
+  const pinged = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    for (const c of s.courts) {
+      const st = c.match?.startedAt
+      if (st && !pinged.current.has(st) && now - st >= TIME_MARK_MIN * 60000) {
+        pinged.current.add(st)
+        chime('timer')
+      }
+    }
+  }, [now, s.courts])
 
   function flash(msg: string) {
     setNote(msg)
@@ -44,6 +68,7 @@ export default function Live({ s }: { s: Session }) {
   const waitingPlayers = waiting.reduce((n, u) => n + u.ids.length, 0)
   const need = unitsNeeded(s.config.format)
   const upcoming = previewQueue(s, 4)
+  const eta = queueEta(s, now)
   const resting = s.players.filter((p) => p.status === 'resting')
   const winners = s.config.mode === 'winners'
   const freeCourts = s.courts.filter((c) => !c.match).length
@@ -57,6 +82,10 @@ export default function Live({ s }: { s: Session }) {
           {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'} played · {s.players.filter((p) => p.status === 'active').length} playing
         </div>
         <div className="flex gap-2">
+          <button className="btn-soft !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute sounds' : 'Turn sounds on'} title={sound ? 'Sounds on (tap to mute)' : 'Sounds off (tap to turn on)'}>
+            {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          </button>
+          <button className="btn-soft !min-h-10" onClick={() => setBoard(true)} title="Big-screen board for a tablet or TV"><Monitor size={18} /> <span className="hidden min-[420px]:inline">Board</span></button>
           <button className="btn-primary !min-h-10" onClick={() => setPeople(true)}><Users size={18} /> Players</button>
         </div>
       </div>
@@ -64,10 +93,10 @@ export default function Live({ s }: { s: Session }) {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
-          <NextMatch s={s} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
+          <NextMatch s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
           <div className="grid gap-4 sm:grid-cols-2">
             {s.courts.map((c) => (
-              <CourtCard key={c.id} s={s} c={c} now={now} onWin={(side) => { updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null })); flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} onWin={(side) => { updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null })); flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex items-center justify-center gap-3 text-sm">
@@ -107,13 +136,14 @@ export default function Live({ s }: { s: Session }) {
             )}
             {waiting.length > 0 && (
               <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                <div className="mb-1.5 text-xs font-semibold text-slate-500">Waiting line (tap a name to move or pull in)</div>
+                <div className="mb-1.5 text-xs font-semibold text-slate-500">Waiting line: games played · when you are up (tap a name to move)</div>
                 <div className="flex flex-wrap gap-1.5">
                   {waiting.map((u) => (
                     <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                       {u.pri < 0 && <span title="Playing next">⏭ </span>}
                       {u.pri > 0 && <span title="Sent to back">⏬ </span>}
                       {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, gamesOf(p, counts)), 0)}</span>
+                      {etaText(eta.get(u.ids[0])) && <span className="ml-1 text-xs font-normal text-green-700 dark:text-green-400">{etaText(eta.get(u.ids[0]))}</span>}
                     </button>
                   ))}
                 </div>
@@ -138,19 +168,26 @@ export default function Live({ s }: { s: Session }) {
 
       {court?.match && <ScoreSheet s={s} court={court} onClose={() => setScoring(null)} />}
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
+      {board && <Board s={s} onClose={() => setBoard(false)} />}
+      {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} />}
       {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
       {subFor && <SubSheet s={s} courtId={subFor.court} outId={subFor.id} onClose={() => setSubFor(null)} />}
     </div>
   )
 }
 
-function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin }: { s: Session; c: Court; now: number; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b') => void }) {
+function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: Session; c: Court; now: number; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b') => void; onTags: () => void }) {
   const m = c.match
-  const winners = s.config.mode === 'winners'
+  const winners = isKing(s, c)
+  const call = streakCall(s, c.id)
+  const riv = m ? rivalryFor(s, m.a, m.b) : null
+  const overTime = !!m && now - m.startedAt >= TIME_MARK_MIN * 60000
   return (
-    <section className="card overflow-hidden">
+    <section className="card paddl-in overflow-hidden">
       <div className="flex items-center justify-between bg-green-600 px-4 py-2 text-white">
         <h2 className="font-bold">{c.name}</h2>
+        <button onClick={onTags} className="ml-2 grid h-7 w-7 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} rules and badges`} title="Court badges"><Tag size={14} /></button>
+        <span className="flex-1" />
         {m && (
           <span className="flex items-center gap-1 text-xs font-medium text-green-100">
             {winners && m.streak > 0 && <span className="mr-1 flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5"><Crown size={12} /> {m.streak} in a row</span>}
@@ -158,6 +195,15 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin }: { s: Session; 
           </span>
         )}
       </div>
+      {!!c.tags?.length && (
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 bg-slate-50 px-3 py-1.5 dark:border-slate-800 dark:bg-slate-800/50">
+          {c.tags.map((tag) => (
+            <span key={tag} title={COURT_TAGS[tag].hint} className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 shadow-sm dark:bg-slate-700 dark:text-slate-100">{COURT_TAGS[tag].emoji} {COURT_TAGS[tag].label}</span>
+          ))}
+        </div>
+      )}
+      {m && overTime && <div className="bg-amber-100 px-3 py-1 text-center text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">⏱ Over {TIME_MARK_MIN} minutes on this court</div>}
+      {call && <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"><Crown size={15} /> {call}</div>}
       {m ? (
         <div className="p-3">
           <Side s={s} ids={m.a} onSub={(id) => onSub(id)} holders={winners && m.streak > 0} />
@@ -171,6 +217,7 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin }: { s: Session; 
           <button className="btn-primary mt-2 w-full !min-h-12" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
             <Trophy size={18} /> Won
           </button>
+          {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           <div className="mt-3 flex gap-2">
             <button className="btn-soft flex-1" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
             <button className="btn-soft flex-1" onClick={onRemix} title="Remix this game: new partners and opponents" aria-label={`Remix ${c.name}`}>
@@ -377,8 +424,9 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
   )
 }
 
-function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick, onSwap, onRemix }: {
+function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap, onRemix }: {
   s: Session
+  eta: ReturnType<typeof queueEta>
   upcoming: ReturnType<typeof previewQueue>
   freeCourts: number
   waiting: number
@@ -391,7 +439,7 @@ function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick, onSwap, onR
   const winners = s.config.mode === 'winners'
   const unitWord = s.config.format === 'teams' ? 'teams' : 'players'
   return (
-    <section className="card border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
+    <section key={next ? [...next.a, ...(next.b ?? [])].join() : 'none'} className="card paddl-in border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">Next match</h2>
         <div className="flex items-center gap-2">
@@ -422,6 +470,16 @@ function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick, onSwap, onR
               : `Need ${Math.max(1, need - waiting)} more ${unitWord} to make the next match.`}
         </p>
       )}
+      {next?.b && (() => {
+        const riv = rivalryFor(s, next.a, next.b)
+        const t = etaText(eta.get(next.a[0]))
+        return (
+          <>
+            {t && !freeCourts && <p className="mt-2 text-sm font-semibold text-green-700 dark:text-green-400">⏱ Up in {t}</p>}
+            {riv && <p className="mt-2 rounded-lg bg-sky-100 px-3 py-1.5 text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
+          </>
+        )
+      })()}
       {next && upcoming[1] && (
         <p className="mt-2 truncate text-xs text-slate-500">
           Then: {join(upcoming[1].a.map((id) => nameOf(s, id)))}
@@ -499,6 +557,37 @@ function WaitSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => 
           <button className="btn-soft flex-1" onClick={() => done((x) => setStatus(x, id, 'resting'))}><Moon size={16} /> Take a break</button>
           <button className="btn-ghost flex-1 text-red-600" onClick={() => { if (confirm(`${p.name} has left for the day?`)) done((x) => setStatus(x, id, 'left')) }}>Left</button>
         </div>
+      </div>
+    </Sheet>
+  )
+}
+
+function TagSheet({ s, courtId, onClose }: { s: Session; courtId: string; onClose: () => void }) {
+  const c = s.courts.find((x) => x.id === courtId)
+  if (!c) return null
+  return (
+    <Sheet title={`${c.name}: rules and badges`} onClose={onClose}>
+      <div className="space-y-2">
+        <p className="text-sm text-slate-500">Badges show on the court card and the board so everyone knows what to expect before stepping on.</p>
+        {(Object.keys(COURT_TAGS) as CourtTag[]).map((tag) => {
+          const on = !!c.tags?.includes(tag)
+          return (
+            <button
+              key={tag}
+              role="switch"
+              aria-checked={on}
+              onClick={() => updateActive((x) => toggleCourtTag(x, c.id, tag))}
+              className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${on ? 'border-green-600 bg-green-50 dark:bg-green-950/40' : 'border-slate-200 dark:border-slate-700'}`}
+            >
+              <span className="text-2xl">{COURT_TAGS[tag].emoji}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-bold">{COURT_TAGS[tag].label}</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">{COURT_TAGS[tag].hint}</span>
+              </span>
+              <span className={`text-sm font-bold ${on ? 'text-green-700 dark:text-green-400' : 'text-slate-400'}`}>{on ? 'On' : 'Off'}</span>
+            </button>
+          )
+        })}
       </div>
     </Sheet>
   )

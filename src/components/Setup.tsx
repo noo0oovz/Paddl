@@ -113,7 +113,10 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
           {advanced && (
             <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-800">
               <Toggle checked={cfg.winBy2} onChange={(b) => set({ winBy2: b })} label="Win by 2" hint="Turn off for rally-style first-to-target" />
-              {cfg.mode === 'winners' && (
+              {cfg.mode !== 'winners' && cfg.courts >= 2 && (
+                <Toggle checked={!!cfg.challengerCourt} onChange={(b) => set({ challengerCourt: b })} label="Challenger court" hint="Court 1 keeps the winners on and announces win streaks. Other courts rotate as normal" />
+              )}
+              {(cfg.mode === 'winners' || cfg.challengerCourt) && (
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <div className="text-sm font-semibold">Max wins in a row</div>

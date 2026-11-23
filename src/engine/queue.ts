@@ -107,6 +107,12 @@ const WEIGHTS: Record<Mode, { partner: number; opp: number; skill: number; squar
   winners: { partner: 10, opp: 3, skill: 0, square: false },
   skill: { partner: 4, opp: 1, skill: 25, square: false },
   robin: { partner: 10, opp: 8, skill: 0, square: true },
+  mystery: { partner: 8, opp: 2, skill: 0, square: false },
+}
+
+/** Randomised, wider-pool drawing: used after a host remix and for Mystery mix. */
+function shuffly(s: Session): boolean {
+  return !!s.fresh || s.config.mode === 'mystery'
 }
 
 function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
@@ -127,7 +133,7 @@ function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
   }
   // Tiny deterministic jitter so equal options do not always pick the sign-up order.
   // After a host remix the jitter is strong enough to break out of the "best" (repeating) split.
-  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq) + ':' + (s.remix ?? 0)) * (s.fresh ? 5 : 0.4)
+  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq) + ':' + (s.remix ?? 0)) * (shuffly(s) ? 5 : 0.4)
   return cost
 }
 
@@ -164,8 +170,8 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
     const cutoff = normal[r - 1].games
     const must = normal.filter((u) => u.games < cutoff)
     // A remix also considers players one game ahead, so the line-up can really change.
-    const tied = normal.filter((u) => (s.fresh ? u.games <= cutoff + 1 : u.games === cutoff)).filter((u) => u.games >= cutoff).slice(0, 9)
-    rankOf = (u) => (s.fresh ? 0 : tied.indexOf(u))
+    const tied = normal.filter((u) => (shuffly(s) ? u.games <= cutoff + 1 : u.games === cutoff)).filter((u) => u.games >= cutoff).slice(0, 9)
+    rankOf = (u) => (shuffly(s) ? 0 : tied.indexOf(u))
     candidates = combos(tied, r - must.length).map((c) => [...front, ...must, ...c])
   }
 
@@ -191,7 +197,7 @@ export function proposeChallengers(s: Session, exclude: Set<string>, counts = co
   let best = pool[0]
   let bestN = Infinity
   for (const u of pool) {
-    const n = (counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0) + (s.fresh ? hash(u.key + ':' + (s.remix ?? 0)) * 3 : 0)
+    const n = (counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0) + (shuffly(s) ? hash(u.key + ':' + (s.remix ?? 0) + ':' + Math.floor(s.seq)) * 3 : 0)
     if (n < bestN) { bestN = n; best = u }
   }
   return [first.ids[0], best.ids[0]]

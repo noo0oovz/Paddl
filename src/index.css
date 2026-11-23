@@ -64,3 +64,26 @@ body {
 .sheet-in {
   animation: sheet-in 0.18s ease-out;
 }
+
+/* Smooth entrance for cards that appear or change (waiting -> next up -> on court). Respects reduced motion. */
+@keyframes paddl-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.paddl-in {
+  animation: paddl-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .paddl-in,
+  .sheet-in {
+    animation: none;
+  }
+}
