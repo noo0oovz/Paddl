@@ -7,6 +7,7 @@ import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
 import { useConfirm } from './Confirm'
+import { HalfCourt } from './art'
 import {
   addCourt, addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, planCourtRemoval, removeCourt, MAX_COURTS, setLevel,
   setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
@@ -210,17 +211,24 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
       {call && <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 text-sm font-bold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200"><Crown size={15} /> {call}</div>}
       {m ? (
         <div className="p-3">
-          <Side s={s} ids={m.a} onSub={(id) => onSub(id)} holders={winners && m.streak > 0} />
-          <button className="btn-primary mt-2 w-full !min-h-12" onClick={() => onWin('a')} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
-            <Trophy size={18} /> Won
-          </button>
-          <div className="my-3 flex items-center gap-3 text-xs font-bold tracking-widest text-slate-400">
-            <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> VS <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
+          {/* The court: far half on top, the net, then the near half. Partners stand in the left and right service courts. */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-inner dark:border-white/10" role="group" aria-label={`${c.name} court`}>
+            <Half s={s} ids={m.a} side="far" king={winners && m.streak > 0} onSub={onSub} />
+            <div className="relative z-10 flex items-center gap-2 bg-slate-900 px-3 py-1.5 text-[10px] font-black tracking-[0.3em] text-slate-300 dark:bg-black/60" aria-hidden>
+              <span className="h-px flex-1 bg-[repeating-linear-gradient(90deg,#8a97b1_0_3px,transparent_3px_7px)]" />
+              NET
+              <span className="h-px flex-1 bg-[repeating-linear-gradient(90deg,#8a97b1_0_3px,transparent_3px_7px)]" />
+            </div>
+            <Half s={s} ids={m.b} side="near" onSub={onSub} />
           </div>
-          <Side s={s} ids={m.b} onSub={(id) => onSub(id)} />
-          <button className="btn-primary mt-2 w-full !min-h-12" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
-            <Trophy size={18} /> Won
-          </button>
+          <div className="mt-2 grid gap-2">
+            <button className="btn-primary !min-h-12 !justify-start !px-4" onClick={() => onWin('a')} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
+              <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.a.map((id) => nameOf(s, id)))} won</span>
+            </button>
+            <button className="btn-primary !min-h-12 !justify-start !px-4" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
+              <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.b.map((id) => nameOf(s, id)))} won</span>
+            </button>
+          </div>
           {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           <div className="mt-3 flex gap-2">
             <button className="btn-soft flex-1" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
@@ -245,19 +253,25 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
   )
 }
 
-function Side({ s, ids, onSub, holders }: { s: Session; ids: string[]; onSub: (id: string) => void; holders?: boolean }) {
+/** One team's half of the court: grass-green surface, white lines, partners in the left and right service courts. */
+function Half({ s, ids, side, king, onSub }: { s: Session; ids: string[]; side: 'near' | 'far'; king?: boolean; onSub: (id: string) => void }) {
   return (
-    <div className={`grid gap-2 ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-      {ids.map((id) => (
-        <button
-          key={id}
-          onClick={() => onSub(id)}
-          title="Tap to swap this player"
-          className={`min-h-12 truncate rounded-xl px-3 py-2 text-center text-base font-bold ${holders ? 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200' : 'bg-slate-100 dark:bg-slate-800'}`}
-        >
-          {nameOf(s, id)}
-        </button>
-      ))}
+    <div className="relative bg-gradient-to-b from-emerald-600 to-emerald-700 text-white dark:from-emerald-700 dark:to-emerald-800">
+      <HalfCourt side={side} className="pointer-events-none absolute inset-0 h-full w-full text-white/70" />
+      <div className={`relative grid min-h-[5.5rem] ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} ${side === 'far' ? 'items-start pt-3 pb-5' : 'items-end pt-5 pb-3'}`}>
+        {ids.map((id) => (
+          <button
+            key={id}
+            onClick={() => onSub(id)}
+            title="Tap to swap this player"
+            className={`mx-2 truncate rounded-xl px-2 py-2.5 text-center text-base font-black tracking-tight shadow-lg backdrop-blur-sm transition active:scale-95 ${
+              king ? 'bg-amber-300 text-amber-950 ring-2 ring-amber-100/80' : 'bg-slate-950/70 text-white ring-1 ring-white/25 hover:bg-slate-950/85'
+            }`}
+          >
+            {nameOf(s, id)}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

@@ -9,7 +9,7 @@ import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
 import { elapsed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
-import { CourtLines } from './art'
+import { CourtLines, PaddleBall } from './art'
 
 /**
  * Big-screen scoreboard and queue board: high contrast, large type. Prop a tablet near the courts or cast the tab
@@ -103,7 +103,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                 <section key={`${c.id}:${m ? m.startedAt : 'idle'}`} className="paddl-in relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md">
                   <div className="relative flex items-center justify-between border-b border-white/10 px-5 py-3">
                     <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${m ? 'bg-accent shadow-[0_0_18px_rgba(182,255,59,0.9)]' : 'bg-slate-700'}`} />
-                    <h2 className="text-2xl font-black tracking-tight sm:text-3xl">🏓 {c.name}</h2>
+                    <h2 className="flex items-center gap-2 text-2xl font-black tracking-tight sm:text-3xl"><PaddleBall size={30} glow={false} /> {c.name}</h2>
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                       {c.tags?.map((t) => <span key={t} className="rounded-full bg-white/10 px-2.5 py-1">{COURT_TAGS[t].emoji} {COURT_TAGS[t].label}</span>)}
                       {m && <span className="tabular-nums">⏱ {elapsed(m.startedAt, now)}</span>}

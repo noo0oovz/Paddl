@@ -32,7 +32,7 @@ export default function Help({ onClose, onTour }: { onClose: () => void; onTour?
           <ol className="space-y-1.5">
             <li className={li}><b>1.</b> Tap <b>New session</b>, type or paste your players (one per line), and pick how many courts you have.</li>
             <li className={li}><b>2.</b> Tap <b>Start session</b>. Paddl puts the first players on the courts and lines up the next match.</li>
-            <li className={li}><b>3.</b> When a game ends, tap the <b>Won</b> button under the winning team. The next game starts on its own.</li>
+            <li className={li}><b>3.</b> When a game ends, tap the <b>“… won”</b> button for the winning team. The next game starts on its own.</li>
             <li className={li}><b>4.</b> At the end tap <b>End</b>. You get final standings, games played, match history and images to share.</li>
           </ol>
         </Topic>

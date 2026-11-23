@@ -128,11 +128,11 @@ function Home({ onNew, onHelp }: { onNew: () => void; onHelp: () => void }) {
       </div>
 
       <section className="card relative mt-3 overflow-hidden px-5 pt-8 pb-7 text-center">
-        <CourtLines className="pointer-events-none absolute inset-x-4 top-4 h-auto w-[calc(100%-2rem)] text-slate-400/20 [mask-image:linear-gradient(to_bottom,transparent,#000_30%,#000_55%,transparent)] dark:text-accent/12" />
+        <CourtLines className="pointer-events-none absolute inset-x-6 bottom-0 h-24 w-[calc(100%-3rem)] text-slate-400/20 [mask-image:linear-gradient(to_top,#000,transparent)] dark:text-accent/15" />
         <div className="relative">
           <div className="mx-auto w-fit"><Logo size={84} /></div>
           <h1 className="mt-3 text-5xl font-black tracking-tight drop-shadow-[0_2px_12px_var(--bg)]">PADDL</h1>
-          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-300">Fair pickleball queues for open play.<br />No sign-up. Works offline. 🏓</p>
+          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-300">Fair pickleball queues for open play.<br />No sign-up. Works offline.</p>
           <button className="btn-primary mt-6 w-full !min-h-14 text-base" onClick={onNew}><Plus size={22} /> New session</button>
         </div>
       </section>
@@ -155,7 +155,7 @@ function Home({ onNew, onHelp }: { onNew: () => void; onHelp: () => void }) {
           <ol className="grid gap-2 sm:grid-cols-3">
             {[
               ['👥', 'Add players', 'Paste your list and pick your courts and a mode.'],
-              ['🏆', 'Tap Won', 'When a game ends, tap the winning team. The next match starts itself.'],
+              ['🏆', 'Tap the winner', 'When a game ends, tap the green button for the winning team. The next match starts itself.'],
               ['📸', 'Share the recap', 'End the session for standings, history and images for the group chat.'],
             ].map(([e, title, text], i) => (
               <li key={title} className="card p-4">

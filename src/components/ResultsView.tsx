@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, Crown, Flame, Timer, Trophy } from 'lucide-react'
 import type { Session } from '../engine/types'
+import { PaddleBall } from './art'
 import { nameOf, standings, summarize, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
 
@@ -37,7 +38,7 @@ export function Podium({ rows }: { rows: PlayerStat[] }) {
           return (
             <div key={p.id} className="flex flex-col items-center">
               <div className={first ? 'text-4xl drop-shadow-[0_0_14px_rgba(255,194,51,0.7)]' : 'text-3xl'}>{first ? '👑' : medal(i)}</div>
-              <div className={`mt-1 w-full truncate px-1 font-black tracking-tight ${first ? 'text-xl' : 'text-base'}`}>{p.name}</div>
+              <div className={`mt-1 line-clamp-2 w-full px-1 font-black leading-tight tracking-tight break-words ${first ? 'text-lg' : 'text-sm'}`}>{p.name}</div>
               <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">{p.wins}W · {p.losses}L</div>
               <div
                 className={`flex w-full items-start justify-center rounded-t-2xl border border-b-0 pt-2 text-2xl font-black ${height[col]} ${
@@ -59,8 +60,8 @@ export function Podium({ rows }: { rows: PlayerStat[] }) {
 /** A row of headline numbers. */
 export function StatStrip({ s }: { s: Session }) {
   const sum = summarize(s)
-  const items: [string, string, string][] = [
-    ['🎾', String(sum.matches), 'games'],
+  const items: [React.ReactNode, string, string][] = [
+    [<PaddleBall key="pb" size={22} glow={false} />, String(sum.matches), 'games'],
     ['👥', String(s.players.length), 'players'],
     ['⏱', minutes(sum.durationMs), 'session'],
     ['🔥', sum.hotStreak ? String(sum.hotStreak.longestStreak) : '–', 'best streak'],
@@ -69,7 +70,7 @@ export function StatStrip({ s }: { s: Session }) {
     <div className="mt-4 grid grid-cols-4 gap-2">
       {items.map(([e, v, l]) => (
         <div key={l} className="card px-2 py-3 text-center">
-          <div className="text-lg leading-none">{e}</div>
+          <div className="flex h-5 items-center justify-center text-lg leading-none">{e}</div>
           <div className="mt-1 text-lg font-black tabular-nums leading-tight">{v}</div>
           <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase dark:text-slate-400">{l}</div>
         </div>
