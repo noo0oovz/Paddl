@@ -1,5 +1,5 @@
 import { forwardRef, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, ChevronDown, Download, Share2, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Download, FileSpreadsheet, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
 import { awards, type Award } from '../engine/insights'
@@ -12,6 +12,7 @@ import { HistorySection, Highlights, ParticipationSection, Podium, StandingsSect
 import { CourtLines } from './art'
 import ThemeSwitch from './ThemeSwitch'
 import { useConfirm } from './Confirm'
+import { resultsCsv } from '../lib/csv'
 
 const C = { ink: '#0b1121', mute: '#5f6d89', line: '#e2e8f4', soft: '#eef2f9', green: '#3f6b00', lime: '#b6ff3b', dark: '#05070d', cyan: '#22d3ee' }
 
@@ -208,12 +209,18 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
     return renderPng(node)
   }
 
-  async function makeAll(): Promise<{ part: Part; blob: Blob; name: string }[] | null> {
+  const recapRef = useRef<HTMLDivElement>(null)
+  const hasAwards = recapAwards.length > 0
+  const pictureCount = PARTS.length + (hasAwards ? 1 : 0)
+
+  /** Every picture to share: standings, games played, match history, and the awards card when there are awards. */
+  async function makeAll(): Promise<{ blob: Blob; name: string }[] | null> {
     setBusy(true)
     setMsg(null)
     try {
-      const out: { part: Part; blob: Blob; name: string }[] = []
-      for (const [i, p] of PARTS.entries()) out.push({ part: p.id, blob: await makeOne(p.id), name: partFile(s, p.id, i + 1) })
+      const out: { blob: Blob; name: string }[] = []
+      for (const [i, p] of PARTS.entries()) out.push({ blob: await makeOne(p.id), name: partFile(s, p.id, i + 1) })
+      if (hasAwards && recapRef.current) out.push({ blob: await renderPng(recapRef.current), name: fileName(s.name).replace(/.png$/, `-${PARTS.length + 1}-awards.png`) })
       return out
     } catch {
       setMsg('Could not create the images. Try again.')
@@ -230,7 +237,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       download(f.blob, f.name)
       await wait(350) // browsers drop downloads fired in the same tick
     }
-    setMsg('Saved 3 images: standings, participation and match history.')
+    setMsg(`Saved ${all.length} images.`)
   }
 
   async function shareAll() {
@@ -249,28 +256,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       download(f.blob, f.name)
       await wait(350)
     }
-    setMsg('Sharing is not available here, so the 3 images were saved instead.')
-  }
-
-  const recapRef = useRef<HTMLDivElement>(null)
-  async function recap(share: boolean) {
-    if (!recapRef.current) return
-    setBusy(true)
-    setMsg(null)
-    try {
-      const blob = await renderPng(recapRef.current)
-      const name = fileName(s.name).replace(/\.png$/, '-recap.png')
-      if (share && canShareFile(blob, name)) {
-        try { await shareImage(blob, name, s.name + ' recap') } catch { download(blob, name); setMsg('Sharing is not available here, so the recap was saved instead.') }
-      } else {
-        download(blob, name)
-        setMsg('Recap saved.')
-      }
-    } catch {
-      setMsg('Could not create the recap. Try again.')
-    } finally {
-      setBusy(false)
-    }
+    setMsg(`Sharing is not available here, so the ${all.length} images were saved instead.`)
   }
 
   async function saveOne(part: Part, n: number) {
@@ -346,21 +332,19 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       <section className="card relative mt-6 overflow-hidden p-4">
         <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-accent shadow-[0_0_14px_rgba(182,255,59,0.9)]" />
         <h2 className="flex items-center gap-2 text-lg font-black tracking-tight">📸 Share the results</h2>
-        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Save pictures for the group chat: standings, games played, and match history.</p>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Save pictures for the group chat: standings, games played, match history and the awards.</p>
         <div className="mt-3 flex gap-2">
-          <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save images (3)'}</button>
+          <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : `Save images (${pictureCount})`}</button>
           {typeof navigator !== 'undefined' && 'share' in navigator && (
             <button className="btn-soft flex-1 !min-h-12" onClick={shareAll} disabled={busy}><Share2 size={18} /> Share</button>
           )}
         </div>
-        {recapAwards.length > 0 && (
-          <div className="mt-2 flex gap-2">
-            <button className="btn-soft flex-1" onClick={() => recap(false)} disabled={busy}><Download size={16} /> Save awards card</button>
-            {typeof navigator !== 'undefined' && 'share' in navigator && (
-              <button className="btn-soft flex-1" onClick={() => recap(true)} disabled={busy}><Share2 size={16} /> Share awards</button>
-            )}
-          </div>
-        )}
+        <button
+          className="btn-ghost mt-2 w-full"
+          onClick={() => { download(new Blob([resultsCsv(s)], { type: 'text/csv;charset=utf-8' }), fileName(s.name).replace(/.png$/, '.csv')); setMsg('Spreadsheet saved (opens in Excel, Numbers or Google Sheets).') }}
+        >
+          <FileSpreadsheet size={16} /> Download as spreadsheet (CSV)
+        </button>
         {msg && <p className="mt-3 text-sm font-semibold text-brand" role="status">{msg}</p>}
 
         <button className="mt-3 flex w-full items-center justify-between text-left text-sm font-semibold text-slate-500 dark:text-slate-400" onClick={() => setPreview((v) => !v)} aria-expanded={preview}>

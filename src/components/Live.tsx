@@ -92,13 +92,13 @@ export default function Live({ s }: { s: Session }) {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="min-w-0 space-y-4">
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
           <NextMatch s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
-              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} onWin={(side) => { updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null })); flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} onWin={(side) => { const gid = c.match?.gid; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
@@ -110,7 +110,7 @@ export default function Live({ s }: { s: Session }) {
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="min-w-0 space-y-4">
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-bold">Up next</h2>
@@ -221,11 +221,11 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
             </div>
             <Half s={s} ids={m.b} side="near" onSub={onSub} />
           </div>
-          <div className="mt-2 grid gap-2">
-            <button className="btn-primary !min-h-12 !justify-start !px-4" onClick={() => onWin('a')} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
+          <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
+            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('a')} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
               <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.a.map((id) => nameOf(s, id)))} won</span>
             </button>
-            <button className="btn-primary !min-h-12 !justify-start !px-4" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
+            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
               <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.b.map((id) => nameOf(s, id)))} won</span>
             </button>
           </div>
@@ -258,7 +258,7 @@ function Half({ s, ids, side, king, onSub }: { s: Session; ids: string[]; side: 
   return (
     <div className="relative bg-gradient-to-b from-emerald-600 to-emerald-700 text-white dark:from-emerald-700 dark:to-emerald-800">
       <HalfCourt side={side} className="pointer-events-none absolute inset-0 h-full w-full text-white/70" />
-      <div className={`relative grid min-h-[5.5rem] ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} ${side === 'far' ? 'items-start pt-3 pb-5' : 'items-end pt-5 pb-3'}`}>
+      <div className={`relative grid min-h-[5.5rem] ${ids.length > 1 ? 'grid-cols-[repeat(2,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1fr)]'} ${side === 'far' ? 'items-start pt-3 pb-5' : 'items-end pt-5 pb-3'}`}>
         {ids.map((id) => (
           <button
             key={id}
@@ -479,7 +479,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
         </div>
       </div>
       {next ? (
-        <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto_1fr]">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <TeamBox s={s} ids={next.a} onPick={onPick} onSwap={onSwap} canSwap={waiting > need} />
           <div className="text-center text-xs font-bold tracking-widest text-slate-400">{next.b ? 'VS' : 'CHALLENGE'}</div>
           {next.b ? (
@@ -519,7 +519,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
 
 function TeamBox({ s, ids, onPick, onSwap, canSwap }: { s: Session; ids: string[]; onPick: (id: string) => void; onSwap: (id: string) => void; canSwap: boolean }) {
   return (
-    <div className={`grid gap-1.5 ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+    <div className={`grid gap-1.5 ${ids.length > 1 ? 'grid-cols-[repeat(2,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1fr)]'}`}>
       {ids.map((id) => (
         <div key={id} className="flex min-h-11 overflow-hidden rounded-xl bg-white shadow-sm dark:bg-slate-800">
           <button onClick={() => onPick(id)} className="min-w-0 flex-1 truncate px-2 py-2 text-center font-bold" title="More options">

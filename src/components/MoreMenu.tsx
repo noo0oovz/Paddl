@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { HelpCircle, Home, MoreHorizontal } from 'lucide-react'
+import { HardDriveDownload, HelpCircle, Home, MoreHorizontal } from 'lucide-react'
 import ThemeSwitch from './ThemeSwitch'
 
 /** Phone header "more" menu: keeps the title readable by tucking theme, help and all-sessions away. */
-export default function MoreMenu({ onHelp, onHome }: { onHelp: () => void; onHome: () => void }) {
+export default function MoreMenu({ onHelp, onHome, onData }: { onHelp: () => void; onHome: () => void; onData: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -29,6 +29,7 @@ export default function MoreMenu({ onHelp, onHome }: { onHelp: () => void; onHom
           <div className="label !mb-1">Theme</div>
           <ThemeSwitch />
           <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onHelp() }}><HelpCircle size={18} /> How to use</button>
+          <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onData() }}><HardDriveDownload size={18} /> Backup and restore</button>
           <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onHome() }}><Home size={18} /> All sessions</button>
         </div>
       )}

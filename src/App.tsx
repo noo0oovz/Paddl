@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { CircleDot, Flag, HelpCircle, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
+import { CircleDot, Flag, HardDriveDownload, HelpCircle, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
 import { endSession } from './engine/session'
 import { MODE_INFO, type Session } from './engine/types'
-import { openSession, updateActive, useData } from './store'
+import { damagedAtStartup, openSession, updateActive, useData } from './store'
 import { fmtDate } from './lib/util'
 import { useWakeLock } from './lib/util'
 import Setup from './components/Setup'
@@ -12,6 +12,8 @@ import History from './components/History'
 import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
 import Help from './components/Help'
+import DataSheet from './components/DataSheet'
+import UpdateBanner from './components/UpdateBanner'
 import { useConfirm } from './components/Confirm'
 import MoreMenu from './components/MoreMenu'
 import Tour, { tourSeen } from './components/Tour'
@@ -24,6 +26,7 @@ export default function App() {
   const { sessions, activeId } = useData()
   const [creating, setCreating] = useState(false)
   const [help, setHelp] = useState(false)
+  const [data, setData] = useState(false)
   const [tour, setTour] = useState(() => !tourSeen())
   const [tab, setTab] = useState<Tab>('live')
   const active = sessions.find((s) => s.id === activeId) ?? null
@@ -33,18 +36,20 @@ export default function App() {
   let screen
   if (creating) screen = <Setup onCancel={() => setCreating(false)} />
   else if (active?.endedAt) screen = <Summary s={active} onBack={() => openSession(null)} />
-  else if (!active) screen = <Home onNew={() => setCreating(true)} onHelp={() => setHelp(true)} />
-  else screen = <Shell s={active} tab={tab} setTab={setTab} onHelp={() => setHelp(true)} />
+  else if (!active) screen = <Home onNew={() => setCreating(true)} onHelp={() => setHelp(true)} onData={() => setData(true)} />
+  else screen = <Shell s={active} tab={tab} setTab={setTab} onHelp={() => setHelp(true)} onData={() => setData(true)} />
   return (
     <>
       {screen}
       {help && <Help onClose={() => setHelp(false)} onTour={() => setTour(true)} />}
+      {data && <DataSheet onClose={() => setData(false)} />}
+      <UpdateBanner />
       {tour && <Tour onDone={() => setTour(false)} />}
     </>
   )
 }
 
-function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: Tab) => void; onHelp: () => void }) {
+function Shell({ s, tab, setTab, onHelp, onData }: { s: Session; tab: Tab; setTab: (t: Tab) => void; onHelp: () => void; onData: () => void }) {
   const tabs: { id: Tab; label: string; icon: typeof Flag }[] = [
     { id: 'live', label: 'Courts', icon: CircleDot },
     { id: 'standings', label: 'Standings', icon: Trophy },
@@ -77,6 +82,7 @@ function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: T
         ))}
         <div className="mt-auto space-y-1">
           <button className="btn-ghost w-full justify-start" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+          <button className="btn-ghost w-full justify-start" onClick={onData}><HardDriveDownload size={18} /> Backup and restore</button>
           <UndoButton full />
           <SaveStatus className="block px-1 pb-1" />
           <div className="pb-1"><ThemeSwitch /></div>
@@ -93,7 +99,7 @@ function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: T
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             <UndoButton />
-            <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} />
+            <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} onData={onData} />
             <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
           </div>
         </header>
@@ -116,17 +122,25 @@ function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: T
   )
 }
 
-function Home({ onNew, onHelp }: { onNew: () => void; onHelp: () => void }) {
+function Home({ onNew, onHelp, onData }: { onNew: () => void; onHelp: () => void; onData: () => void }) {
   const { sessions } = useData()
   const live = sessions.filter((s) => !s.endedAt)
   const past = sessions.filter((s) => s.endedAt)
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-16">
       <div className="mb-2 flex items-center justify-between">
-        <button className="btn-soft !min-h-10" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+        <div className="flex gap-2">
+          <button className="btn-soft !min-h-10" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+          <button className="btn-soft !min-h-10" onClick={onData} aria-label="Backup and restore" title="Backup and restore"><HardDriveDownload size={18} /></button>
+        </div>
         <ThemeSwitch />
       </div>
 
+      {damagedAtStartup > 0 && (
+        <div role="alert" className="mt-2 rounded-xl bg-amber-100 px-3 py-2 text-sm font-semibold text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+          {damagedAtStartup} saved {damagedAtStartup === 1 ? 'session was' : 'sessions were'} damaged and set aside so Paddl could open. Nothing else was lost.
+        </div>
+      )}
       <section className="card relative mt-3 overflow-hidden px-5 pt-8 pb-7 text-center">
         <CourtLines className="pointer-events-none absolute inset-x-6 bottom-0 h-24 w-[calc(100%-3rem)] text-slate-400/20 [mask-image:linear-gradient(to_top,#000,transparent)] dark:text-accent/15" />
         <div className="relative">

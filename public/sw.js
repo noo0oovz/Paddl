@@ -1,7 +1,19 @@
 const CACHE = 'paddl-__BUILD__'
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './manifest.webmanifest', './icon-192.png'])).then(() => self.skipWaiting()))
+  e.waitUntil(
+    caches
+      .open(CACHE)
+      .then((c) => c.addAll(['./', './manifest.webmanifest', './icon-192.png']))
+      // First visit: nothing is running yet, so there is nothing to interrupt, so start working straight away
+      // (this is what makes the app available offline). An update waits for the host instead (see 'message').
+      .then(() => (self.registration.active ? undefined : self.skipWaiting())),
+  )
+})
+
+// The app asks the waiting worker to take over only when the host chooses to reload.
+self.addEventListener('message', (e) => {
+  if (e.data === 'skip-waiting') self.skipWaiting()
 })
 
 self.addEventListener('activate', (e) => {

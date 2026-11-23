@@ -117,14 +117,14 @@ export function fill(input: Session): Session {
     if (court.hold) {
       const ch = proposeChallengers(s, exclude, counts)
       if (!ch) continue
-      court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak }
+      court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak, gid: s.nextId++ }
       court.hold = null
       clearPrio(s, ch)
       started = true
     } else {
       const m = proposeMatch(s, exclude, counts)
       if (!m) continue
-      court.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
+      court.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0, gid: s.nextId++ }
       clearPrio(s, [...m.a, ...m.b])
       started = true
     }
@@ -182,14 +182,14 @@ export function remixCourt(s: Session, courtId: string): Session {
     if (keep) {
       const ch = proposeChallengers(d, exclude)
       if (ch && matchSig(keep, ch) !== oldSig) {
-        c.match = { a: keep, b: ch, startedAt: Date.now(), streak: old.streak }
+        c.match = { a: keep, b: ch, startedAt: Date.now(), streak: old.streak, gid: d.nextId++ }
         clearPrio(d, ch)
         break
       }
     } else {
       const m = proposeMatch(d, exclude)
       if (m && matchSig(m.a, m.b) !== oldSig) {
-        c.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
+        c.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0, gid: d.nextId++ }
         clearPrio(d, [...m.a, ...m.b])
         break
       }
@@ -391,9 +391,16 @@ export interface Result {
   winner: 'a' | 'b' | null
   scoreA: number | null
   scoreB: number | null
+  /** The number of the game the host was looking at. A tap meant for an earlier game (a fast double tap, or a
+   *  screen that was slow to update) is ignored instead of scoring the game that replaced it. */
+  expect?: number
 }
 
 export function finishMatch(s: Session, courtId: string, r: Result): Session {
+  const now = s.courts.find((x) => x.id === courtId)?.match
+  if (!now) return s
+  // Stale tap: that game is already finished. (Games saved by older versions have no number, so they are not checked.)
+  if (r.expect !== undefined && now.gid !== undefined && now.gid !== r.expect) return s
   return mutate(s, (d) => {
     const c = d.courts.find((x) => x.id === courtId)
     if (!c?.match) return

@@ -120,6 +120,12 @@ body::before {
 }
 
 /* ---- Components ----------------------------------------------------------------------------- */
+/* Long names and words must wrap or truncate, never widen the page. */
+.card,
+.card * {
+  overflow-wrap: anywhere;
+}
+
 @utility card {
   @apply rounded-2xl border backdrop-blur-md;
   background: var(--glass);

@@ -187,7 +187,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                   </div>
                 </div>
               )}
-              <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+              <ul className="mt-3 grid grid-cols-[minmax(0,1fr)] gap-1.5 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
                 {players.map((p, i) => (
                   <li key={p.name} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-1.5 text-sm font-medium dark:bg-slate-800">
                     <span className="min-w-0 flex-1 truncate">{p.name}</span>

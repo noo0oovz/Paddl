@@ -45,6 +45,7 @@ export interface Live {
   b: string[]
   startedAt: number
   streak: number // wins already banked by side `a` (the holders). 0 = fresh match
+  gid?: number // unique game number (never repeats), so a tap can be tied to the exact game on screen
 }
 
 export interface Hold {

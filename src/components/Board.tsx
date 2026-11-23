@@ -55,7 +55,8 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     const c = s.courts.find((x) => x.id === courtId)
     if (!c?.match) return
     const ids = side === 'a' ? c.match.a : c.match.b
-    updateActive((x) => finishMatch(x, courtId, { winner: side, scoreA: null, scoreB: null }))
+    const gid = c.match.gid
+    if (!updateActive((x) => finishMatch(x, courtId, { winner: side, scoreA: null, scoreB: null, expect: gid }))) return // an ignored stale tap
     show(`${join(ids.map((id) => nameOf(s, id)))} won on ${c.name}`)
   }
 
@@ -197,7 +198,7 @@ function BoardTeam({ s, ids, king, onWin }: { s: Session; ids: string[]; king?: 
     <button
       onClick={onWin}
       aria-label={`${label} won`}
-      className={`group grid w-full gap-2 rounded-2xl border-2 p-2 text-center transition active:scale-[0.985] ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'} ${
+      className={`group grid w-full gap-2 rounded-2xl border-2 p-2 text-center transition active:scale-[0.985] ${ids.length > 1 ? 'grid-cols-[repeat(2,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1fr)]'} ${
         king ? 'border-amber-400/50 bg-amber-400/10 hover:border-amber-300' : 'border-white/10 bg-white/5 hover:border-accent hover:bg-accent/10'
       }`}
     >

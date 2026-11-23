@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { Session } from './engine/types'
+import { makeBackup, mergeBackup, sessionProblem, type Backup } from './lib/backup'
 
 export interface RosterEntry {
   name: string
@@ -36,13 +37,33 @@ function loadUndo(): UndoStore {
   return { sessionId: null, stack: [] }
 }
 
+const DAMAGED_KEY = 'paddl:damaged'
+
+/** How many saved sessions were set aside at startup because they were damaged (shown once so the host knows). */
+export let damagedAtStartup = 0
+
 function load(): Omit<Data, 'undo' | 'saved'> {
   try {
     const raw = localStorage.getItem(KEY)
     if (raw) {
       const d = JSON.parse(raw)
       if (Array.isArray(d.sessions)) {
-        return { sessions: d.sessions, activeId: d.activeId ?? null, roster: Array.isArray(d.roster) ? d.roster : [] }
+        // A damaged session must never be able to crash the whole app. Keep the good ones, and set the damaged
+        // ones aside (the raw data is kept under another key, never thrown away) so the host can still open Paddl.
+        const good: Session[] = []
+        const bad: unknown[] = []
+        for (const s of d.sessions) (sessionProblem(s) ? bad : good).push(s)
+        if (bad.length) {
+          damagedAtStartup = bad.length
+          try {
+            const prev = JSON.parse(localStorage.getItem(DAMAGED_KEY) || '[]')
+            localStorage.setItem(DAMAGED_KEY, JSON.stringify([...(Array.isArray(prev) ? prev : []), ...bad].slice(-20)))
+          } catch {
+            /* storage full: the damaged data is dropped from view but this is the best that can be done */
+          }
+        }
+        const active = typeof d.activeId === 'string' && good.some((s) => s.id === d.activeId) ? d.activeId : null
+        return { sessions: good, activeId: active, roster: Array.isArray(d.roster) ? d.roster.filter((r: unknown) => typeof r === 'object' && r !== null && typeof (r as RosterEntry).name === 'string') : [] }
       }
     }
   } catch {
@@ -126,15 +147,17 @@ export function forgetRoster(name: string) {
 }
 
 /** Apply a change to the open session, remembering the previous state for undo. */
-export function updateActive(fn: (s: Session) => Session) {
+/** Returns true when something actually changed (an ignored request leaves the session, Undo and storage alone). */
+export function updateActive(fn: (s: Session) => Session): boolean {
   const cur = data.sessions.find((s) => s.id === data.activeId)
-  if (!cur) return
+  if (!cur) return false
   const next = fn(cur)
-  if (next === cur) return
+  if (next === cur) return false
   if (undoStore.sessionId !== cur.id) resetUndo(cur.id)
   undoStore.stack.push(JSON.stringify(cur))
   if (undoStore.stack.length > UNDO_LIMIT) undoStore.stack.shift()
   commit({ sessions: data.sessions.map((s) => (s.id === cur.id ? next : s)) })
+  return true
 }
 
 export function undo() {
@@ -142,4 +165,72 @@ export function undo() {
   if (!prev) return
   const restored = JSON.parse(prev) as Session
   commit({ sessions: data.sessions.map((s) => (s.id === restored.id ? restored : s)) })
+}
+
+/* ----------------------------------------------------------------------------------------------
+ * Backup and restore
+ * -------------------------------------------------------------------------------------------- */
+const SAFETY_KEY = 'paddl:before-restore'
+
+/** Everything on the device as a backup object (the file the host downloads). */
+export function exportAll(): Backup {
+  return makeBackup(data.sessions, data.roster)
+}
+
+/** Take a copy of the current data just before a restore overwrites it, so a wrong click can be undone. */
+function saveSafetyCopy() {
+  try {
+    localStorage.setItem(SAFETY_KEY, JSON.stringify({ at: Date.now(), ...makeBackup(data.sessions, data.roster) }))
+  } catch {
+    /* storage full: restoring still works, there is just no safety copy */
+  }
+}
+
+export function hasSafetyCopy(): number | null {
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY)
+    return raw ? (JSON.parse(raw).at as number) : null
+  } catch {
+    return null
+  }
+}
+
+export interface RestoreReport {
+  mode: 'merge' | 'replace'
+  sessions: number
+  added: number
+  updated: number
+  kept: number
+}
+
+/**
+ * Put a validated backup onto this device. "merge" keeps everything already here and adds or upgrades sessions from
+ * the file; "replace" makes the device match the file. Either way the open session and undo history are reset, so
+ * nothing refers to data that just changed, and a safety copy is stored first.
+ */
+export function restoreBackup(b: Backup, mode: 'merge' | 'replace'): RestoreReport {
+  saveSafetyCopy()
+  resetUndo(null)
+  if (mode === 'replace') {
+    commit({ sessions: [...b.sessions].sort((x, y) => y.createdAt - x.createdAt), roster: b.roster.slice(0, 200), activeId: null })
+    return { mode, sessions: b.sessions.length, added: b.sessions.length, updated: 0, kept: 0 }
+  }
+  const m = mergeBackup({ sessions: data.sessions, roster: data.roster }, b)
+  commit({ sessions: m.sessions, roster: m.roster, activeId: null })
+  return { mode, sessions: m.sessions.length, added: m.added, updated: m.updated, kept: m.kept }
+}
+
+/** Undo the last restore using the safety copy. */
+export function undoRestore(): boolean {
+  try {
+    const raw = localStorage.getItem(SAFETY_KEY)
+    if (!raw) return false
+    const b = JSON.parse(raw) as Backup
+    resetUndo(null)
+    commit({ sessions: b.sessions, roster: b.roster, activeId: null })
+    localStorage.removeItem(SAFETY_KEY)
+    return true
+  } catch {
+    return false
+  }
 }

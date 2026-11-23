@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import { applyTheme } from './lib/theme'
+import { watchForUpdates } from './lib/update'
 
 applyTheme()
 
@@ -14,6 +15,6 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => { /* offline support is optional */ })
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).then(watchForUpdates).catch(() => { /* offline support is optional */ })
   })
 }

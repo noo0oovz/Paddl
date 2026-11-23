@@ -822,3 +822,58 @@ describe('Fixed teams standings rank teams, not individual players', () => {
     expect(rows[1].name).toBe('Stee & Kp') // lost, but played: ranks above the two teams that did not play
   })
 })
+
+describe('a stale tap cannot score the wrong game', () => {
+  it('a second tap meant for the finished game is ignored', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    const first = s.courts[0].match!.gid
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null, expect: first })
+    expect(s.matches).toHaveLength(1)
+    const next = s.courts[0].match!
+    const again = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null, expect: first })
+    expect(again).toBe(s) // same object: nothing changed, and Undo is not polluted
+    expect(again.matches).toHaveLength(1)
+    expect(again.courts[0].match).toBe(next)
+  })
+
+  it('the first tap works, and so does a tap with no expectation (the score sheet)', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    s = finishMatch(s, s.courts[0].id, { winner: 'b', scoreA: null, scoreB: null, expect: s.courts[0].match!.gid })
+    expect(s.matches).toHaveLength(1)
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: 11, scoreB: 4 })
+    expect(s.matches).toHaveLength(2)
+  })
+
+  it('ten taps on one game record exactly one result', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    const stamp = s.courts[0].match!.gid
+    for (let i = 0; i < 10; i++) s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null, expect: stamp })
+    expect(s.matches).toHaveLength(1)
+  })
+
+  it('games saved by older versions (no game number) still work', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    delete s.courts[0].match!.gid
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null, expect: 12345 })
+    expect(s.matches).toHaveLength(1)
+  })
+
+  it('every game gets its own number, even within the same millisecond', () => {
+    let s = createSession('t', { courts: 2 }, names(16))
+    const seen = new Set<number>()
+    for (let i = 0; i < 30; i++) {
+      for (const c of s.courts) if (c.match) { expect(c.match.gid).toBeDefined(); if (!seen.has(c.match.gid!)) seen.add(c.match.gid!) }
+      const c = s.courts.find((x) => x.match)!
+      s = finishMatch(s, c.id, { winner: 'a', scoreA: null, scoreB: null })
+    }
+    const live = s.courts.filter((c) => c.match).map((c) => c.match!.gid)
+    expect(new Set(live).size).toBe(live.length)
+    expect(seen.size).toBeGreaterThan(20)
+  })
+
+  it('a tap for a court that no longer exists or has no game does nothing', () => {
+    const s = createSession('t', { courts: 1 }, names(3)) // not enough players: nothing on court
+    expect(finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: null, scoreB: null, expect: 1 })).toBe(s)
+    expect(finishMatch(s, 'nope', { winner: 'a', scoreA: null, scoreB: null })).toBe(s)
+  })
+})
