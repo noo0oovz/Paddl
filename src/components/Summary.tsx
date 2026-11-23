@@ -4,7 +4,8 @@ import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
 import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
-import { removeSession } from '../store'
+import { reopenSession } from '../engine/session'
+import { removeSession, updateActive } from '../store'
 import { medal } from './Standings'
 import ThemeSwitch from './ThemeSwitch'
 
@@ -259,8 +260,11 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
         ))}
       </div>
 
+      <button className="btn-soft mt-6 w-full" onClick={() => updateActive((x) => reopenSession(x))}>
+        Ended by mistake? Reopen this session
+      </button>
       <button
-        className="btn-ghost mt-6 w-full text-red-600"
+        className="btn-ghost mt-2 w-full text-red-600"
         onClick={() => { if (confirm('Delete this session and its history for good?')) { removeSession(s.id); onBack() } }}
       >
         <Trash2 size={16} /> Delete this session

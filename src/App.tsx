@@ -11,6 +11,7 @@ import Standings from './components/Standings'
 import History from './components/History'
 import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
+import UndoButton, { SaveStatus } from './components/UndoButton'
 
 type Tab = 'live' | 'standings' | 'history'
 
@@ -53,6 +54,8 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
           </button>
         ))}
         <div className="mt-auto space-y-1">
+          <UndoButton full />
+          <SaveStatus className="block px-1 pb-1" />
           <div className="pb-1"><ThemeSwitch /></div>
           <button className="btn-ghost w-full justify-start" onClick={() => openSession(null)}><HomeIcon size={18} /> All sessions</button>
           <button className="btn-danger w-full" onClick={finish}><Flag size={18} /> End session</button>
@@ -63,9 +66,10 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
           <button className="min-w-0 text-left" onClick={() => openSession(null)}>
             <div className="truncate text-base font-extrabold leading-tight">{s.name}</div>
-            <div className="text-[11px] text-slate-500">{MODE_INFO[s.config.mode].label} · tap for all sessions</div>
+            <div className="truncate text-[11px] text-slate-500">{MODE_INFO[s.config.mode].label}</div>
           </button>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
+            <UndoButton />
             <ThemeSwitch compact />
             <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
           </div>

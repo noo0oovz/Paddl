@@ -4,6 +4,8 @@ import {
 import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
 
+/** Games a player can miss on a break before the fairness catch-up starts. */
+export const BREAK_GRACE = 2
 export const MIN_LEVEL = 2
 export const MAX_LEVEL = 5.5
 
@@ -105,7 +107,10 @@ export function fill(input: Session): Session {
       started = true
     }
   }
-  if (started) s.fresh = false // the remix has been used up; later matches go back to strict fairness
+  if (started) {
+    s.fresh = false // the remix has been used up; later matches go back to strict fairness
+    expireBackPrio(s)
+  }
   return s
 }
 
@@ -264,10 +269,13 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
       p.status = status
       if (status === 'active') {
         p.intervals.push([d.seq, null])
-        p.lastPlayed = d.seq
+        // A returning player keeps the place in line they had earned (lastPlayed and games are left alone).
+        // Only a long absence gets a catch-up, so they cannot come back and take every court.
         if (d.config.lateJoinMedian) {
           const counts = countMatches(d.matches)
-          p.baseGames = Math.max(p.baseGames, medianGames(d, counts, p.id) - (counts.games.get(p.id) ?? 0))
+          const mine = gamesOf(p, counts)
+          const behind = medianGames(d, counts, p.id) - mine
+          if (behind > BREAK_GRACE) p.baseGames += behind - BREAK_GRACE
         }
       }
     }
@@ -277,6 +285,13 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
 function clearPrio(d: Session, ids: string[]) {
   for (const p of d.players) {
     if (ids.includes(p.id)) { delete p.prio; delete p.prioAt }
+  }
+}
+
+/** A match was just drawn: "send to back" requests lapse so nobody is buried for the rest of the night. */
+function expireBackPrio(d: Session) {
+  for (const p of d.players) {
+    if (p.prio === 'back') { delete p.prio; delete p.prioAt }
   }
 }
 
@@ -416,6 +431,24 @@ export function setMode(s: Session, mode: Config['mode']): Session {
     d.config.mode = mode
     for (const c of d.courts) c.hold = null
   })
+}
+
+/** Take the next player in line out of the upcoming match: one tap. They go to the back; the next in line steps up. */
+export function swapOutOfNext(s: Session, id: string): Session {
+  const waiting = waitingUnits(s)
+  if (waiting.length <= unitsNeeded(s.config.format)) return s // nobody extra to bring in
+  return sendBack(s, id)
+}
+
+/** Re-open a session that was ended by mistake. */
+export function reopenSession(s: Session): Session {
+  const d = clone(s)
+  d.endedAt = null
+  for (const p of d.players) {
+    const last = p.intervals[p.intervals.length - 1]
+    if (p.status === 'active' && last && last[1] !== null) p.intervals.push([last[1], null])
+  }
+  return fill(d)
 }
 
 export function endSession(s: Session): Session {

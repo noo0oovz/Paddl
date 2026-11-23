@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, sendBack, setCourts, setStatus, substitute,
+  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, reopenSession, swapOutOfNext, sendBack, setCourts, setStatus, substitute,
 } from './session'
 import { standings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
@@ -449,5 +449,95 @@ describe('remix', () => {
     const m = remixCourt(s, s.courts[0].id).courts[0].match!
     expect(sig(m.a, m.b)).not.toBe(sig(old.a, old.b))
     for (const side of [m.a, m.b]) expect(s.teams.some((t) => pairKey(t.playerIds[0], t.playerIds[1]) === pairKey(side[0], side[1]))).toBe(true)
+  })
+})
+
+describe('breaks keep earned priority', () => {
+  it('a short break does not reset wait time or add games', () => {
+    let s = createSession('t', { courts: 1 }, names(9))
+    s = simulate(s, 2)
+    const onCourt = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    const id = s.players.find((p) => !onCourt.includes(p.id))!.id
+    const before = s.players.find((p) => p.id === id)!
+    const snap = { base: before.baseGames, last: before.lastPlayed }
+    s = setStatus(s, id, 'resting')
+    s = simulate(s, 1)
+    s = setStatus(s, id, 'active')
+    const after = s.players.find((p) => p.id === id)!
+    expect(after.lastPlayed).toBe(snap.last)
+    expect(after.baseGames).toBe(snap.base)
+  })
+
+  it('a long absence gets a capped catch-up so they cannot take every court', () => {
+    let s = createSession('t', { courts: 1 }, names(9))
+    s = setStatus(s, s.players[8].id, 'resting')
+    s = simulate(s, 10)
+    s = setStatus(s, s.players[8].id, 'active')
+    const p = s.players[8]
+    expect(p.baseGames).toBeGreaterThan(0)
+    s = simulate(s, 3)
+    expect(standings(s).find((x) => x.id === p.id)!.played).toBeLessThanOrEqual(3)
+  })
+
+  it('a player who waited the longest comes back at the front', () => {
+    let s = createSession('t', { courts: 1 }, names(10))
+    const onCourt = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    const id = s.players.find((p) => !onCourt.includes(p.id))!.id
+    s = setStatus(s, id, 'resting')
+    s = setStatus(s, id, 'active')
+    const first = previewQueue(s, 1)[0]
+    expect([...first.a, ...first.b!]).toContain(id)
+  })
+})
+
+describe('one-tap swap out of the next match', () => {
+  it('sends the player to the back and the next in line steps up', () => {
+    let s = createSession('t', { courts: 1 }, names(10))
+    const next = previewQueue(s, 1)[0]
+    const id = next.a[0]
+    s = swapOutOfNext(s, id)
+    const after = previewQueue(s, 1)[0]
+    expect([...after.a, ...after.b!]).not.toContain(id)
+    expect([...after.a, ...after.b!]).toHaveLength(4)
+  })
+
+  it('does nothing when there is nobody extra to bring in', () => {
+    const s = createSession('t', { courts: 1 }, names(8))
+    const next = previewQueue(s, 1)[0]
+    expect(swapOutOfNext(s, next.a[0])).toBe(s)
+  })
+})
+
+describe('reopening an ended session', () => {
+  it('restores play and keeps the match history', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    s = simulate(s, 3)
+    s = endSession(s)
+    s = reopenSession(s)
+    expect(s.endedAt).toBeNull()
+    expect(s.matches).toHaveLength(3)
+    expect(s.courts[0].match).not.toBeNull()
+  })
+})
+
+describe('send to back is temporary', () => {
+  it('a player sent to the back still gets games (no starvation)', () => {
+    let s = createSession('t', { courts: 2 }, names(14))
+    const victim = previewQueue(s, 1)[0].a[0]
+    s = swapOutOfNext(s, victim)
+    s = simulate(s, 20)
+    expect(spread(s)).toBeLessThanOrEqual(2)
+    expect(standings(s).find((p) => p.id === victim)!.played).toBeGreaterThan(0)
+  })
+
+  it('repeated swaps of the same slot cannot starve anyone', () => {
+    let s = createSession('t', { courts: 2 }, names(14))
+    for (let i = 0; i < 12; i++) {
+      const next = previewQueue(s, 1)[0]
+      if (next) s = swapOutOfNext(s, next.a[0])
+      s = simulate(s, 1)
+    }
+    s = simulate(s, 14)
+    expect(Math.min(...standings(s).map((p) => p.played))).toBeGreaterThan(0)
   })
 })
