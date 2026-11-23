@@ -20,5 +20,7 @@ export default defineConfig(({ command }) => ({
       },
     },
   ],
-  test: { environment: 'node', include: ['src/**/*.test.ts'] },
+  // The randomised stress suites run thousands of actions. They take ~3s on a fast machine, so allow plenty of
+  // headroom: a slow shared CI runner must never fail a correct test on time alone.
+  test: { environment: 'node', include: ['src/**/*.test.ts'], testTimeout: 60_000, hookTimeout: 60_000 },
 }))
