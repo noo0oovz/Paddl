@@ -204,7 +204,7 @@ let speaking = 0
  * which sounds like a person reading an announcement and not like one flat stream of words.
  * Returns false when this device cannot speak.
  */
-export function speak(text: string): boolean {
+export function speak(text: string, onDone?: () => void): boolean {
   if (!speechSupported()) return false
   const parts = sentences(text)
   if (!parts.length) return false
@@ -222,7 +222,9 @@ export function speak(text: string): boolean {
     // A caller's voice rises a little on the court number and settles at the end; vary it so it is never monotone.
     u.pitch = i === 0 ? 1.08 : i === parts.length - 1 ? 0.97 : 1.02
     u.volume = 1
-    u.onend = () => { if (ticket === speaking && i === parts.length - 1) speaking = 0 }
+    // The last sentence finishing, or any sentence failing, means the announcement is over.
+    u.onend = () => { if (ticket === speaking && i === parts.length - 1) { speaking = 0; onDone?.() } }
+    u.onerror = () => { if (ticket === speaking) { speaking = 0; onDone?.() } }
     speechSynthesis.speak(u)
   })
   return true

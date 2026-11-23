@@ -17,7 +17,8 @@ import { updateActive } from '../store'
 import { elapsed, join, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
-import { courtCall, initVoices, speak, speechSupported, stopSpeaking, upNextCall } from '../lib/announce'
+import { courtCall, upNextCall } from '../lib/announce'
+import { useAnnouncer } from '../lib/useAnnouncer'
 
 export default function Live({ s }: { s: Session }) {
   const now = useNow()
@@ -28,18 +29,15 @@ export default function Live({ s }: { s: Session }) {
   const [note, setNote] = useState<string | null>(null)
   const [board, setBoard] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
-  const [speakingId, setSpeakingId] = useState<string | null>(null)
-  useEffect(() => { initVoices(); return () => stopSpeaking() }, [])
-
-  /** Say it aloud. Tapping the same button again while it is talking stops it instead of talking over itself. */
+  // What each call-out is about: the game on that court (or the upcoming match). It stops if that changes.
+  const nextUp = previewQueue(s, 1)[0]
+  const contexts: Record<string, string> = Object.fromEntries([
+    ...s.courts.map((c) => [c.id, c.match ? String(c.match.gid ?? c.match.startedAt) : 'idle']),
+    ['next', nextUp ? [...nextUp.a, ...(nextUp.b ?? [])].join() : 'none'],
+  ])
+  const { speakingId, announce: speakNow } = useAnnouncer(contexts)
   function announce(id: string, text: string) {
-    if (!speechSupported()) { flash('This browser cannot speak out loud. Try Chrome or Safari.'); return }
-    if (speakingId === id) { stopSpeaking(); setSpeakingId(null); return }
-    if (!speak(text)) return
-    setSpeakingId(id)
-    // clear the "speaking" look when it should be done (about 2.4 words a second, plus the pauses)
-    const ms = Math.max(2500, text.split(/s+/).length * 450 + 1200)
-    setTimeout(() => setSpeakingId((cur) => (cur === id ? null : cur)), ms)
+    if (!speakNow(id, text)) flash('This browser cannot speak out loud. Try Chrome or Safari.')
   }
   const [tagFor, setTagFor] = useState<string | null>(null)
   const sound = useSound()

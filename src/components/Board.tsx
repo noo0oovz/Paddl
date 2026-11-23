@@ -11,7 +11,8 @@ import { elapsed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall } from './art'
 import VoiceSheet from './VoiceSheet'
-import { courtCall, initVoices, speak, speechSupported, stopSpeaking, upNextCall } from '../lib/announce'
+import { courtCall, upNextCall } from '../lib/announce'
+import { useAnnouncer } from '../lib/useAnnouncer'
 
 /**
  * Big-screen scoreboard and queue board: high contrast, large type. Prop a tablet near the courts or cast the tab
@@ -23,20 +24,16 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const sound = useSound()
   const [full, setFull] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
-  const [speakingId, setSpeakingId] = useState<string | null>(null)
-  useEffect(() => { initVoices(); return () => stopSpeaking() }, [])
-  /** Say it aloud; tapping the same button again while it is talking stops it. */
-  function announce(id: string, text: string) {
-    if (!speechSupported()) return
-    if (speakingId === id) { stopSpeaking(); setSpeakingId(null); return }
-    if (!speak(text)) return
-    setSpeakingId(id)
-    setTimeout(() => setSpeakingId((cur) => (cur === id ? null : cur)), Math.max(2500, text.split(/s+/).length * 450 + 1200))
-  }
+  const upcoming = previewQueue(s, 4)
+  const contexts: Record<string, string> = Object.fromEntries([
+    ...s.courts.map((c) => [c.id, c.match ? String(c.match.gid ?? c.match.startedAt) : 'idle']),
+    ['next', upcoming[0] ? [...upcoming[0].a, ...(upcoming[0].b ?? [])].join() : 'none'],
+  ])
+  const { speakingId, announce: speakNow } = useAnnouncer(contexts)
+  const announce = (id: string, text: string) => { speakNow(id, text) }
   const [toast, setToast] = useState<{ text: string; id: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eta = queueEta(s, now)
-  const upcoming = previewQueue(s, 4)
   const waiting = waitingUnits(s)
 
   useEffect(() => {
