@@ -93,12 +93,12 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
                   <div style={{ width: `${(r.played / maxGames) * 100}%`, background: C.green }} />
                   <div style={{ width: `${(r.satOut / maxGames) * 100}%`, background: '#cbd5e1' }} />
                 </div>
-                <div style={{ width: 100, textAlign: 'right', color: C.mute, fontSize: 13 }}><b style={{ color: C.ink }}>{r.played}</b> played{r.satOut ? ` · ${r.satOut} sat` : ''}</div>
+                <div style={{ width: 160, textAlign: 'right', color: C.mute, fontSize: 13, whiteSpace: 'nowrap' }}><b style={{ color: C.ink }}>{r.played}</b> played{r.satOut ? ` · ${r.satOut} waiting` : ''}</div>
               </div>
             ))}
             <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: C.mute }}>
               <span><i style={{ display: 'inline-block', width: 10, height: 10, background: C.green, borderRadius: 3, marginRight: 5 }} />Games played</span>
-              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: '#cbd5e1', borderRadius: 3, marginRight: 5 }} />Sat out</span>
+              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: '#cbd5e1', borderRadius: 3, marginRight: 5 }} />Waiting for a court</span>
             </div>
           </>
         )}
