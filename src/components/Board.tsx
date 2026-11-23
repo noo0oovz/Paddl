@@ -10,6 +10,8 @@ import { setSound, useSound } from '../lib/cues'
 import { elapsed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall } from './art'
+import VoiceSheet from './VoiceSheet'
+import { courtCall, initVoices, speak, speechSupported, stopSpeaking, upNextCall } from '../lib/announce'
 
 /**
  * Big-screen scoreboard and queue board: high contrast, large type. Prop a tablet near the courts or cast the tab
@@ -20,6 +22,17 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const { undo: undoDepth } = useData()
   const sound = useSound()
   const [full, setFull] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+  useEffect(() => { initVoices(); return () => stopSpeaking() }, [])
+  /** Say it aloud; tapping the same button again while it is talking stops it. */
+  function announce(id: string, text: string) {
+    if (!speechSupported()) return
+    if (speakingId === id) { stopSpeaking(); setSpeakingId(null); return }
+    if (!speak(text)) return
+    setSpeakingId(id)
+    setTimeout(() => setSpeakingId((cur) => (cur === id ? null : cur)), Math.max(2500, text.split(/s+/).length * 450 + 1200))
+  }
   const [toast, setToast] = useState<{ text: string; id: number } | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eta = queueEta(s, now)
@@ -71,16 +84,17 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950 p-4 text-white sm:p-6" role="dialog" aria-label="Court board">
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(50rem_30rem_at_10%_-10%,rgba(182,255,59,0.12),transparent_60%),radial-gradient(50rem_30rem_at_100%_0%,rgba(34,211,238,0.12),transparent_60%)]" />
       <div className="mx-auto max-w-[1600px]">
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-bold tracking-[0.25em] text-accent"><span className="live-dot" /> PADDL · LIVE BOARD</div>
             <div className="truncate text-2xl font-black tracking-tight sm:text-4xl">{s.name}</div>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={doUndo} disabled={!undoDepth} className={iconBtn} aria-label="Undo last action" title="Undo"><Undo2 size={20} /> <span className="hidden sm:inline">Undo</span></button>
-            <button onClick={() => setSound(!sound)} className={iconBtn} aria-pressed={sound} aria-label={sound ? 'Mute sounds' : 'Turn sounds on'} title="Sounds">
+            <button onClick={() => setSound(!sound)} className={iconBtn} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title="Chimes (the beep when a game starts)">
               {sound ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
+            <button onClick={() => setVoiceOpen(true)} className={iconBtn} aria-label="Announcer voice settings" title="Choose the announcer voice"><Volume2 size={20} /> <span className="hidden sm:inline">Voice</span></button>
             {document.fullscreenEnabled && (
               <button onClick={toggleFull} className={iconBtn} aria-label={full ? 'Exit full screen' : 'Full screen'}>
                 {full ? <Minimize2 size={20} /> : <Maximize2 size={20} />} <span className="hidden sm:inline">{full ? 'Exit' : 'Full screen'}</span>
@@ -115,6 +129,14 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                       <BoardTeam s={s} ids={m.a} king={m.streak > 0} onWin={() => win(c.id, 'a')} />
                       <div className="text-center text-sm font-bold tracking-[0.4em] text-slate-500">VS</div>
                       <BoardTeam s={s} ids={m.b} onWin={() => win(c.id, 'b')} />
+                      <button
+                        onClick={() => announce(c.id, courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
+                        aria-label={speakingId === c.id ? `Stop announcing ${c.name}` : `Call out ${c.name}`}
+                        aria-pressed={speakingId === c.id}
+                        className={`btn border border-white/10 bg-white/5 text-white hover:bg-white/10 ${speakingId === c.id ? '!border-accent !bg-accent/15 !text-accent' : ''}`}
+                      >
+                        <Volume2 size={20} /> {speakingId === c.id ? 'Calling out… tap to stop' : 'Call out this court'}
+                      </button>
                       {call && <div className="flex items-center gap-2 rounded-xl bg-amber-500/15 px-4 py-2 text-lg font-bold text-amber-300"><Crown size={20} /> {call}</div>}
                       {riv && <div className="rounded-xl bg-sky-500/15 px-4 py-2 text-base font-semibold text-sky-300">{riv.text}</div>}
                     </div>
@@ -131,7 +153,19 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
 
           <aside className="space-y-4">
             <section className="rounded-3xl border border-amber-400/40 bg-amber-400/[0.04] p-5 shadow-[0_0_40px_-18px_rgba(255,194,51,0.6)]">
-              <h2 className="mb-3 text-2xl font-black tracking-tight text-amber-300">⏭ ON DECK</h2>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-2xl font-black tracking-tight text-amber-300">⏭ ON DECK</h2>
+                {upcoming[0] && (
+                  <button
+                    onClick={() => announce('next', upNextCall(upcoming[0].a.map((id) => nameOf(s, id)), upcoming[0].b ? upcoming[0].b.map((id) => nameOf(s, id)) : null))}
+                    aria-label={speakingId === 'next' ? 'Stop announcing the next match' : 'Call out the next match'}
+                    aria-pressed={speakingId === 'next'}
+                    className={`btn border border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20 ${speakingId === 'next' ? '!border-accent !bg-accent/15 !text-accent' : ''}`}
+                  >
+                    <Volume2 size={20} /> {speakingId === 'next' ? 'Stop' : 'Call out'}
+                  </button>
+                )}
+              </div>
               {s.config.mode === 'mystery' && <p className="-mt-2 mb-3 text-sm font-semibold text-amber-200/80">Mystery mix: teams are a surprise when the game starts.</p>}
               {upcoming.length === 0 ? (
                 <p className="text-lg text-slate-400">{waiting.length === 0 ? '✅ Everyone is on court.' : 'Waiting for enough players.'}</p>
@@ -181,6 +215,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         </div>
       </div>
 
+      {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
       {toast && (
         <div key={toast.id} role="status" className="paddl-in fixed inset-x-4 bottom-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-4 py-3 shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Check size={18} /></span>

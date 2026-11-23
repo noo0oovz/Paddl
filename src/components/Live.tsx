@@ -16,6 +16,8 @@ import { validateScore } from '../engine/validate'
 import { updateActive } from '../store'
 import { elapsed, join, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
+import VoiceSheet from './VoiceSheet'
+import { courtCall, initVoices, speak, speechSupported, stopSpeaking, upNextCall } from '../lib/announce'
 
 export default function Live({ s }: { s: Session }) {
   const now = useNow()
@@ -25,6 +27,20 @@ export default function Live({ s }: { s: Session }) {
   const [waitFor, setWaitFor] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [board, setBoard] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+  useEffect(() => { initVoices(); return () => stopSpeaking() }, [])
+
+  /** Say it aloud. Tapping the same button again while it is talking stops it instead of talking over itself. */
+  function announce(id: string, text: string) {
+    if (!speechSupported()) { flash('This browser cannot speak out loud. Try Chrome or Safari.'); return }
+    if (speakingId === id) { stopSpeaking(); setSpeakingId(null); return }
+    if (!speak(text)) return
+    setSpeakingId(id)
+    // clear the "speaking" look when it should be done (about 2.4 words a second, plus the pauses)
+    const ms = Math.max(2500, text.split(/s+/).length * 450 + 1200)
+    setTimeout(() => setSpeakingId((cur) => (cur === id ? null : cur)), ms)
+  }
   const [tagFor, setTagFor] = useState<string | null>(null)
   const sound = useSound()
 
@@ -84,7 +100,7 @@ export default function Live({ s }: { s: Session }) {
           {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'} played · {s.players.filter((p) => p.status === 'active').length} playing
         </div>
         <div className="flex gap-2">
-          <button className="btn-soft !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute sounds' : 'Turn sounds on'} title={sound ? 'Sounds on (tap to mute)' : 'Sounds off (tap to turn on)'}>
+          <button className="btn-soft !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title={sound ? 'Chimes on (tap to mute). This is the beep when a game starts; use the Call out buttons to announce players.' : 'Chimes off (tap to turn on)'}>
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
           </button>
           <button className="btn-soft !min-h-10" onClick={() => setBoard(true)} title="Big-screen board for a tablet or TV"><Monitor size={18} /> <span className="hidden min-[420px]:inline">Board</span></button>
@@ -95,10 +111,10 @@ export default function Live({ s }: { s: Session }) {
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
-          <NextMatch s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
+          <NextMatch speaking={speakingId === 'next'} onAnnounce={(text) => announce('next', text)} onVoice={() => setVoiceOpen(true)} s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
-              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} onWin={(side) => { const gid = c.match?.gid; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side) => { const gid = c.match?.gid; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
@@ -172,6 +188,7 @@ export default function Live({ s }: { s: Session }) {
 
       {court?.match && <ScoreSheet s={s} court={court} onClose={() => setScoring(null)} />}
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
+      {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
       {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} onNote={flash} />}
       {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
@@ -180,7 +197,7 @@ export default function Live({ s }: { s: Session }) {
   )
 }
 
-function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: Session; c: Court; now: number; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b') => void; onTags: () => void }) {
+function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, onWin, onTags }: { s: Session; c: Court; now: number; speaking: boolean; onAnnounce: (text: string) => void; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b') => void; onTags: () => void }) {
   const m = c.match
   const winners = isKing(s, c)
   const call = streakCall(s, c.id)
@@ -230,7 +247,15 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
             </button>
           </div>
           {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
-          <div className="mt-3 flex gap-2">
+          <button
+            className={`btn-soft mt-3 w-full !min-h-12 ${speaking ? '!border-accent !bg-accent/15 text-brand' : ''}`}
+            onClick={() => onAnnounce(courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
+            aria-label={speaking ? `Stop announcing ${c.name}` : `Call out ${c.name}`}
+            aria-pressed={speaking}
+          >
+            <Volume2 size={18} /> {speaking ? 'Calling out…  tap to stop' : 'Call out this court'}
+          </button>
+          <div className="mt-2 flex gap-2">
             <button className="btn-soft flex-1" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
             <button className="btn-soft flex-1" onClick={onRemix} title="Remix this game: new partners and opponents" aria-label={`Remix ${c.name}`}>
               <Shuffle size={16} /> Remix
@@ -451,7 +476,10 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
   )
 }
 
-function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap, onRemix }: {
+function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap, onRemix, speaking, onAnnounce, onVoice }: {
+  speaking: boolean
+  onAnnounce: (text: string) => void
+  onVoice: () => void
   s: Session
   eta: ReturnType<typeof queueEta>
   upcoming: ReturnType<typeof previewQueue>
@@ -471,6 +499,11 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
         <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">{s.config.mode === 'mystery' ? 'Next match (a surprise: teams are re-mixed when it starts)' : 'Next match'}</h2>
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-slate-500 sm:inline">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
+          {next && (
+            <>
+              <button className="btn-ghost !min-h-9 !px-2" onClick={onVoice} aria-label="Announcer voice settings" title="Choose the announcer voice"><Settings2 size={16} /></button>
+            </>
+          )}
           {next && (
             <button className="btn-soft !min-h-9 !px-3" onClick={onRemix} title="Re-draw the upcoming matches with different partners and opponents">
               <Shuffle size={16} /> Remix
@@ -496,6 +529,17 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
               ? 'Waiting for a challenger.'
               : `Need ${Math.max(1, need - waiting)} more ${unitWord} to make the next match.`}
         </p>
+      )}
+      {next && (
+        <button
+          className={`btn-soft mt-3 w-full !min-h-12 ${speaking ? '!border-accent !bg-accent/15 text-brand' : ''}`}
+          onClick={() => onAnnounce(upNextCall(next.a.map((id) => nameOf(s, id)), next.b ? next.b.map((id) => nameOf(s, id)) : null))}
+          aria-label={speaking ? 'Stop announcing the next match' : 'Call out the next match'}
+          aria-pressed={speaking}
+          title="Call out the players who are up next"
+        >
+          <Volume2 size={18} /> {speaking ? 'Calling out… tap to stop' : 'Call out the players up next'}
+        </button>
       )}
       {next?.b && (() => {
         const riv = rivalryFor(s, next.a, next.b)
