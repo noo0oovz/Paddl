@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, reopenSession, addCourt, removeCourt, planCourtRemoval, swapOutOfNext, sendBack, setCourts, setStatus, substitute,
+  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, reopenSession, addTeam, addCourt, removeCourt, planCourtRemoval, swapOutOfNext, sendBack, setCourts, setStatus, substitute,
 } from './session'
-import { standings, summarize, countMatches, pairKey } from './stats'
+import { standings, playerStandings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
 import { previewQueue } from './queue'
+import { awards } from './insights'
 import type { Config, Session } from './types'
 
 const names = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `P${i + 1}`, level: 2 + (i % 7) * 0.5 }))
@@ -727,5 +728,97 @@ describe('removing a court mid-session', () => {
     s = setCourts(s, 2)
     expect(s.courts).toHaveLength(2)
     expect(s.config.courts).toBe(2)
+  })
+})
+
+describe('Fixed teams standings rank teams, not individual players', () => {
+  type P = { name: string }
+  const teamNames: [string, string][] = [['Josh', 'Daria'], ['Stee', 'Kp'], ['Julius', 'Dar'], ['Ann', 'Bo']]
+  const mk = () => createSession('t', { format: 'teams', courts: 1, maxStreak: 9 }, [], teamNames.map(([x, y]) => [{ name: x }, { name: y }] as [P, P]))
+  const teamIds = (s: Session, a: string) => s.teams.find((x) => x.name.startsWith(a))!.playerIds as string[]
+
+  /** Write finished games directly, so each test controls exactly who beat whom. */
+  const record = (s: Session, results: [string, string][]) => {
+    s.matches = results.map(([w, l], i) => ({
+      id: 'g' + i, seq: i + 1, court: 'Court 1', a: teamIds(s, w), b: teamIds(s, l),
+      scoreA: 11, scoreB: 5, winner: 'a' as const, at: i, ms: 600_000,
+    }))
+    s.seq = results.length
+    return s
+  }
+
+  it('shows one row per team, named with both partners', () => {
+    const rows = standings(mk())
+    expect(rows).toHaveLength(4)
+    expect(rows.map((r) => r.name).sort()).toEqual(['Ann & Bo', 'Josh & Daria', 'Julius & Dar', 'Stee & Kp'])
+  })
+
+  it('ranks teams 1st, 2nd, 3rd with their partner (the reported scenario)', () => {
+    const s = record(mk(), [
+      ['Josh', 'Stee'], ['Josh', 'Julius'], ['Josh', 'Ann'],
+      ['Stee', 'Julius'], ['Stee', 'Ann'],
+      ['Julius', 'Ann'],
+    ])
+    const rows = standings(s)
+    expect(rows.slice(0, 3).map((r) => r.name)).toEqual(['Josh & Daria', 'Stee & Kp', 'Julius & Dar'])
+    expect(rows[3].name).toBe('Ann & Bo')
+  })
+
+  it('a team record is counted once, not once per partner', () => {
+    const s = record(mk(), [['Josh', 'Stee']])
+    const team = standings(s).find((r) => r.name === 'Josh & Daria')!
+    expect(team.wins).toBe(1)
+    expect(team.played).toBe(1)
+    const partners = playerStandings(s).filter((p) => ['Josh', 'Daria'].includes(p.name))
+    expect(partners.every((p) => p.wins === 1 && p.played === 1)).toBe(true)
+    expect(standings(s).reduce((n, r) => n + r.played, 0)).toBe(2) // one game = two teams, not four players
+  })
+
+  it('carries the team minutes and point difference', () => {
+    const s = record(mk(), [['Josh', 'Stee']])
+    const team = standings(s).find((r) => r.name === 'Josh & Daria')!
+    expect(team.playMs).toBe(600_000)
+    expect(team.diff).toBe(6)
+  })
+
+  it('doubles and singles still rank individual players', () => {
+    const d = createSession('t', { courts: 1 }, names(5))
+    expect(standings(d)).toHaveLength(5)
+    const one = createSession('t', { format: 'singles', courts: 1 }, names(3))
+    expect(standings(one)).toHaveLength(3)
+    expect(standings(one).some((r) => r.name.includes(' & '))).toBe(false)
+  })
+
+  it('a team added mid-session appears as its own row', () => {
+    let s = mk()
+    s = addTeam(s, { name: 'Late1' }, { name: 'Late2' })
+    expect(standings(s).map((r) => r.name)).toContain('Late1 & Late2')
+    expect(standings(s)).toHaveLength(5)
+  })
+
+  it('awards name teams, never "?" and never split a team into two winners', () => {
+    let s = mk()
+    for (let i = 0; i < 6; i++) s = finishMatch(s, s.courts[0].id, { winner: i % 2 ? 'a' : 'b', scoreA: i % 2 ? 11 : 9, scoreB: i % 2 ? 9 : 11 })
+    const list = awards(s)
+    expect(list.length).toBeGreaterThan(0)
+    for (const a of list) {
+      expect(a.winner).not.toContain('?')
+      expect(a.title).not.toBe('Social Butterfly') // partners never change in Fixed teams
+      expect(a.title).not.toBe('Dynamic Duo')
+    }
+    const iron = list.find((a) => a.id === 'iron')
+    if (iron) expect(iron.winner).toMatch(/ & /)
+  })
+
+  it('has no "best duo" in Fixed teams (it would just repeat the top team)', () => {
+    const s = record(mk(), [['Josh', 'Stee'], ['Josh', 'Stee'], ['Josh', 'Stee']])
+    expect(summarize(s).bestDuo).toBeNull()
+  })
+
+  it('teams with no games sit below teams that have played', () => {
+    const s = record(mk(), [['Josh', 'Stee']])
+    const rows = standings(s)
+    expect(rows[0].name).toBe('Josh & Daria')
+    expect(rows[1].name).toBe('Stee & Kp') // lost, but played: ranks above the two teams that did not play
   })
 })

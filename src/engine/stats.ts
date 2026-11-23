@@ -54,7 +54,40 @@ export interface PlayerStat {
   playMs: number // total time spent on court
 }
 
+/**
+ * Ranked results. In Fixed teams mode the unit that plays and wins is the team, so each team is ONE row named
+ * "Josh & Daria" (a team's partners always share every game, so the row is just the partners' common record).
+ * In every other mode it is one row per player.
+ */
 export function standings(s: Session): PlayerStat[] {
+  const rows = playerStandings(s)
+  if (s.config.format !== 'teams' || !s.teams.length) return rows
+  const byId = new Map(rows.map((r) => [r.id, r]))
+  const out: PlayerStat[] = []
+  for (const team of s.teams) {
+    const [a, b] = team.playerIds.map((id) => byId.get(id))
+    if (!a || !b) continue
+    // Partners share every game; if one joined later or left, the row reflects the shared record (the larger one).
+    const lead = a.played >= b.played ? a : b
+    out.push({
+      ...lead,
+      id: team.id,
+      name: team.playerIds.map((id) => byId.get(id)!.name).join(' & '),
+      status: a.status === 'active' || b.status === 'active' ? 'active' : a.status,
+    })
+  }
+  return rankRows(out)
+}
+
+function rankRows(rows: PlayerStat[]): PlayerStat[] {
+  // Rank by a smoothed win rate so a lucky 1-0 does not outrank a solid 5-1.
+  // Entries with no decided games always rank below anyone who has played one.
+  const rank = (x: PlayerStat) => (x.wins + x.losses === 0 ? -1 : (x.wins + 1) / (x.wins + x.losses + 2))
+  return [...rows].sort((x, y) => rank(y) - rank(x) || y.diff - x.diff || y.wins - x.wins || y.played - x.played || x.name.localeCompare(y.name))
+}
+
+/** One row per individual player, ranked. */
+export function playerStandings(s: Session): PlayerStat[] {
   const ordered = [...s.matches].sort((x, y) => x.seq - y.seq)
   const stats = new Map<string, PlayerStat>()
   const run = new Map<string, number>()
@@ -101,12 +134,7 @@ export function standings(s: Session): PlayerStat[] {
     const decided = st.wins + st.losses
     st.winPct = decided ? st.wins / decided : 0
   }
-  // Rank by a smoothed win rate so a lucky 1-0 does not outrank a solid 5-1.
-  // Players with no decided games always rank below anyone who has played one.
-  const rank = (x: PlayerStat) => (x.wins + x.losses === 0 ? -1 : (x.wins + 1) / (x.wins + x.losses + 2))
-  return [...stats.values()].sort(
-    (x, y) => rank(y) - rank(x) || y.diff - x.diff || y.wins - x.wins || y.played - x.played || x.name.localeCompare(y.name),
-  )
+  return rankRows([...stats.values()])
 }
 
 export interface Duo {
@@ -149,7 +177,8 @@ export function summarize(s: Session): Summary {
       duos.set(k, d)
     }
   }
-  const bestDuo =
+  // In Fixed teams the partners never change, so a "best duo" would just repeat the top team.
+  const bestDuo = s.config.format === 'teams' ? null :
     [...duos.values()]
       .filter((d) => d.wins + d.losses >= 2 && d.wins > 0)
       .sort((x, y) => y.wins / (y.wins + y.losses) - x.wins / (x.wins + x.losses) || y.wins - x.wins)[0] ?? null

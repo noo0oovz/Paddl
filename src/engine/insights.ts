@@ -1,5 +1,5 @@
 import type { Match, Session } from './types'
-import { pairKey, standings, type PlayerStat } from './stats'
+import { pairKey, playerStandings, standings, type PlayerStat } from './stats'
 import { previewQueue } from './queue'
 import { nameOf } from './stats'
 
@@ -177,11 +177,16 @@ function listNames(names: string[]): string {
  * and ties are named together instead of picking one arbitrarily.
  */
 export function awards(s: Session): Award[] {
+  const teams = s.config.format === 'teams' && s.teams.length > 0
+  // In Fixed teams the team is the unit that plays and wins, so rank and name teams. Otherwise rank players.
   const rows = standings(s)
+  const players = playerStandings(s)
   const out: Award[] = []
   if (s.matches.length === 0) return out
 
-  const byId = new Map<string, PlayerStat>(rows.map((r) => [r.id, r]))
+  const byId = new Map<string, PlayerStat>(players.map((r) => [r.id, r]))
+  /** The display name for a side of a game: the team in Fixed teams, otherwise the players. */
+  const sideName = (ids: string[]) => ids.map((id) => byId.get(id)?.name ?? '?').join(' & ')
 
   // Iron Man / Iron Woman: most games, then most time on court. Needs a real lead (at least 2 games played).
   const maxPlayed = Math.max(...rows.map((r) => r.played))
@@ -202,7 +207,13 @@ export function awards(s: Session): Award[] {
   const clutch = new Map<string, number>()
   for (const m of s.matches) {
     if (!isClose(m)) continue
-    for (const id of m.winner === 'a' ? m.a : m.b) clutch.set(id, (clutch.get(id) ?? 0) + 1)
+    const side = m.winner === 'a' ? m.a : m.b
+    if (teams) {
+      const key = [...side].sort().join('+')
+      clutch.set(key, (clutch.get(key) ?? 0) + 1)
+    } else {
+      for (const id of side) clutch.set(id, (clutch.get(id) ?? 0) + 1)
+    }
   }
   if (clutch.size) {
     const best = Math.max(...clutch.values())
@@ -212,17 +223,17 @@ export function awards(s: Session): Award[] {
       id: 'clutch',
       emoji: '🧊',
       title: 'Clutch Closer',
-      winner: listNames(ids.map((id) => byId.get(id)?.name ?? '?')),
+      winner: listNames(ids.map((id) => (teams ? sideName(id.split('+')) : byId.get(id)?.name ?? '?'))),
       detail: `${best} ${best === 1 ? 'win' : 'wins'} by 2 points or less`,
     })
   }
 
   // Social Butterfly: most different partners + opponents met. Needs at least 3 distinct people.
-  const social = rows
+  const social = (teams ? [] : rows)
     .map((r) => ({ r, v: variety(s, r.id) }))
     .map((x) => ({ ...x, total: new Set([...partnersOf(s, x.r.id), ...opponentsOf(s, x.r.id)]).size }))
   const bestSocial = Math.max(0, ...social.map((x) => x.total))
-  if (bestSocial >= 3) {
+  if (!teams && bestSocial >= 3) {
     const tied = social.filter((x) => x.total === bestSocial)
     // Tiebreak: more games played means the variety is more impressive, so keep only those with the max games.
     const maxGames = Math.max(...tied.map((x) => x.r.played))
@@ -279,7 +290,7 @@ export function awards(s: Session): Award[] {
   const duo = [...duos.values()]
     .filter((d) => d.w + d.l >= 3 && d.w > d.l)
     .sort((x, y) => y.w / (y.w + y.l) - x.w / (x.w + x.l) || y.w - x.w)[0]
-  if (duo) {
+  if (duo && !teams) {
     out.push({
       id: 'duo',
       emoji: '🤝',
