@@ -51,6 +51,7 @@ export interface PlayerStat {
   eligible: number // games finished while the player was active
   satOut: number
   longestStreak: number
+  playMs: number // total time spent on court
 }
 
 export function standings(s: Session): PlayerStat[] {
@@ -60,7 +61,7 @@ export function standings(s: Session): PlayerStat[] {
   for (const p of s.players) {
     stats.set(p.id, {
       id: p.id, name: p.name, status: p.status, played: 0, wins: 0, losses: 0,
-      pf: 0, pa: 0, diff: 0, winPct: 0, eligible: 0, satOut: 0, longestStreak: 0,
+      pf: 0, pa: 0, diff: 0, winPct: 0, eligible: 0, satOut: 0, longestStreak: 0, playMs: 0,
     })
     run.set(p.id, 0)
   }
@@ -73,6 +74,7 @@ export function standings(s: Session): PlayerStat[] {
         const st = stats.get(id)
         if (!st) continue
         st.played++
+        st.playMs += m.ms ?? 0
         if (m.winner === null) continue
         if (m.winner === side) {
           st.wins++

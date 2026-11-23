@@ -59,7 +59,8 @@ export interface Match {
   scoreA: number | null
   scoreB: number | null
   winner: 'a' | 'b' | null
-  at: number
+  at: number // when the game was recorded
+  ms?: number // how long the game lasted on court (missing on games saved by older versions)
 }
 
 export interface Session {

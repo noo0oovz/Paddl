@@ -42,7 +42,7 @@ function Frame({ s, title, children }: { s: Session; title: string; children: Re
 export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
   const rows = standings(s)
   const sum = summarize(s)
-  const maxGames = Math.max(1, ...rows.map((r) => r.eligible))
+  const maxPlayed = Math.max(1, ...rows.map((r) => r.played))
   const history = [...s.matches].sort((a, b) => a.seq - b.seq)
   const info = PARTS.find((p) => p.id === part)!
   return (
@@ -86,20 +86,22 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
 
         {part === 'participation' && (
           <>
-            {[...rows].sort((a, b) => b.played - a.played || a.name.localeCompare(b.name)).map((r) => (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 8, fontSize: 11, fontWeight: 800, letterSpacing: 1.2, color: C.mute }}>
+              <div style={{ width: 130 }}>PLAYER</div>
+              <div style={{ flex: 1 }}>GAMES PLAYED</div>
+              <div style={{ width: 150, textAlign: 'right' }}>GAMES · MINUTES</div>
+            </div>
+            {[...rows].sort((a, b) => b.played - a.played || b.playMs - a.playMs || a.name.localeCompare(b.name)).map((r) => (
               <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9, fontSize: 15 }}>
                 <div style={{ width: 130, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                <div style={{ flex: 1, height: 16, background: C.soft, borderRadius: 8, overflow: 'hidden', display: 'flex' }}>
-                  <div style={{ width: `${(r.played / maxGames) * 100}%`, background: C.green }} />
-                  <div style={{ width: `${(r.satOut / maxGames) * 100}%`, background: '#cbd5e1' }} />
+                <div style={{ flex: 1, height: 16, background: C.soft, borderRadius: 8, overflow: 'hidden' }}>
+                  <div style={{ width: `${(r.played / maxPlayed) * 100}%`, height: '100%', background: C.green }} />
                 </div>
-                <div style={{ width: 160, textAlign: 'right', color: C.mute, fontSize: 13, whiteSpace: 'nowrap' }}><b style={{ color: C.ink }}>{r.played}</b> played{r.satOut ? ` · ${r.satOut} waiting` : ''}</div>
+                <div style={{ width: 150, textAlign: 'right', color: C.mute, fontSize: 14, whiteSpace: 'nowrap' }}>
+                  <b style={{ color: C.ink }}>{r.played}</b> {r.played === 1 ? 'game' : 'games'} · <b style={{ color: C.ink }}>{minutes(r.playMs)}</b>
+                </div>
               </div>
             ))}
-            <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: C.mute }}>
-              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: C.green, borderRadius: 3, marginRight: 5 }} />Games played</span>
-              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: '#cbd5e1', borderRadius: 3, marginRight: 5 }} />Waiting for a court</span>
-            </div>
           </>
         )}
 
@@ -131,6 +133,15 @@ function Fact({ label, value, sub }: { label: string; value: string; sub: string
       <div style={{ fontSize: 12, color: C.mute }}>{sub}</div>
     </div>
   )
+}
+
+/** Time on court as minutes ("38 min", "1 h 5 min"); under a minute shows "<1 min", no data shows a dash. */
+export function minutes(ms: number): string {
+  if (ms <= 0) return '–'
+  const m = Math.round(ms / 60000)
+  if (m < 1) return '<1 min'
+  if (m < 60) return `${m} min`
+  return `${Math.floor(m / 60)} h ${m % 60} min`
 }
 
 function partFile(s: Session, part: Part, n: number): string {

@@ -541,3 +541,24 @@ describe('send to back is temporary', () => {
     expect(Math.min(...standings(s).map((p) => p.played))).toBeGreaterThan(0)
   })
 })
+
+describe('time on court', () => {
+  it('records how long each game lasted and totals it per player', () => {
+    let s = createSession('t', { courts: 1 }, names(4))
+    s.courts[0].match!.startedAt = Date.now() - 12 * 60000
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: 11, scoreB: 4 })
+    expect(s.matches[0].ms).toBeGreaterThanOrEqual(12 * 60000)
+    expect(s.matches[0].ms).toBeLessThan(12 * 60000 + 5000)
+    for (const p of standings(s)) expect(Math.round(p.playMs / 60000)).toBe(12)
+  })
+
+  it('adds up across games and ignores games with no recorded duration', () => {
+    let s = createSession('t', { courts: 1 }, names(4))
+    s.courts[0].match!.startedAt = Date.now() - 10 * 60000
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: 11, scoreB: 4 })
+    s.courts[0].match!.startedAt = Date.now() - 5 * 60000
+    s = finishMatch(s, s.courts[0].id, { winner: 'b', scoreA: 4, scoreB: 11 })
+    delete s.matches[0].ms // a game saved by an older version
+    for (const p of standings(s)) expect(Math.round(p.playMs / 60000)).toBe(5)
+  })
+})

@@ -380,6 +380,7 @@ export function finishMatch(s: Session, courtId: string, r: Result): Session {
     const rec: Match = {
       id: newId(d, 'm'), seq: d.seq, court: c.name, a: live.a, b: live.b,
       scoreA: r.scoreA, scoreB: r.scoreB, winner: r.winner, at: Date.now(),
+      ms: Math.max(0, Date.now() - live.startedAt),
     }
     d.matches.push(rec)
     c.match = null
