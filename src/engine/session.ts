@@ -419,9 +419,24 @@ export function editMatch(s: Session, id: string, r: Result): Session {
   })
 }
 
+/**
+ * Remove a game that was recorded by mistake (or never actually happened).
+ * Players get back the queue position they had before it: their "last played" is recomputed from the games
+ * they still have, so they are not left waiting as if they had just played.
+ */
 export function deleteMatch(s: Session, id: string): Session {
   return mutate(s, (d) => {
+    const gone = d.matches.find((m) => m.id === id)
+    if (!gone) return
     d.matches = d.matches.filter((m) => m.id !== id)
+    for (const p of d.players) {
+      if (![...gone.a, ...gone.b].includes(p.id)) continue
+      // Their most recent remaining game, else when they joined the session.
+      const mine = d.matches.filter((m) => m.a.includes(p.id) || m.b.includes(p.id))
+      const lastGame = mine.reduce((n, m) => Math.max(n, m.seq), 0)
+      const joined = p.intervals[0]?.[0] ?? 0
+      p.lastPlayed = Math.max(lastGame, joined)
+    }
   })
 }
 

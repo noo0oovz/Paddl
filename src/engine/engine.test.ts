@@ -562,3 +562,71 @@ describe('time on court', () => {
     for (const p of standings(s)) expect(Math.round(p.playMs / 60000)).toBe(5)
   })
 })
+
+describe('fixing mistakes in match history', () => {
+  const win = (s: Session, side: 'a' | 'b' = 'a') => finishMatch(s, s.courts[0].id, { winner: side, scoreA: side === 'a' ? 11 : 4, scoreB: side === 'a' ? 4 : 11 })
+
+  it('flipping a misclicked winner moves the win and loss in standings', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    s = win(s, 'a')
+    const m = s.matches[0]
+    s = editMatch(s, m.id, { winner: 'b', scoreA: 4, scoreB: 11 })
+    const st = standings(s)
+    for (const id of m.b) expect(st.find((p) => p.id === id)!.wins).toBe(1)
+    for (const id of m.a) expect(st.find((p) => p.id === id)!.losses).toBe(1)
+  })
+
+  it('a game that did not go through gives those players their place back in the queue (games and wait time)', () => {
+    let s = createSession('t', { mode: 'winners', courts: 1, maxStreak: 1 }, names(10))
+    const first = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    s = win(s, 'a')
+    s = win(s, 'a')
+    const lastBefore = Object.fromEntries(s.players.map((p) => [p.id, p.lastPlayed]))
+    s = deleteMatch(s, s.matches[0].id)
+    for (const id of first) {
+      const p = s.players.find((x) => x.id === id)!
+      expect(p.lastPlayed).toBeLessThanOrEqual(lastBefore[id])
+    }
+    expect(s.matches).toHaveLength(1)
+    expect(standings(s).reduce((n, p) => n + p.played, 0)).toBe(4)
+  })
+
+  it('deleting the only game a player had resets them to their join time, not "just played"', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    const ids = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    s = win(s)
+    expect(s.players.find((p) => p.id === ids[0])!.lastPlayed).toBe(1)
+    s = deleteMatch(s, s.matches[0].id)
+    for (const id of ids) expect(s.players.find((p) => p.id === id)!.lastPlayed).toBe(0)
+  })
+
+  it('deleting an older game leaves later players\' wait times alone', () => {
+    let s = createSession('t', { courts: 1 }, names(4))
+    s = win(s)
+    s = win(s)
+    const before = s.players.map((p) => p.lastPlayed)
+    s = deleteMatch(s, s.matches[0].id)
+    expect(s.players.map((p) => p.lastPlayed)).toEqual(before)
+  })
+
+  it('edit keeps the recorded game length and who played', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    s.courts[0].match!.startedAt = Date.now() - 9 * 60000
+    s = win(s)
+    const before = { ms: s.matches[0].ms, a: s.matches[0].a, b: s.matches[0].b }
+    s = editMatch(s, s.matches[0].id, { winner: null, scoreA: null, scoreB: null })
+    expect(s.matches[0].ms).toBe(before.ms)
+    expect(s.matches[0].a).toEqual(before.a)
+    expect(s.matches[0].winner).toBeNull()
+  })
+
+  it('deleting every game returns standings to zero and play continues', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    s = win(s)
+    s = win(s)
+    for (const m of [...s.matches]) s = deleteMatch(s, m.id)
+    expect(s.matches).toHaveLength(0)
+    expect(standings(s).every((p) => p.played === 0)).toBe(true)
+    expect(s.courts[0].match).not.toBeNull()
+  })
+})
