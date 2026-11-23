@@ -6,6 +6,7 @@ import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/
 import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
 import { removeSession } from '../store'
 import { medal } from './Standings'
+import ThemeSwitch from './ThemeSwitch'
 
 const C = { ink: '#0f172a', mute: '#64748b', line: '#e2e8f0', soft: '#f1f5f9', green: '#16a34a', dark: '#14532d' }
 
@@ -215,7 +216,10 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-10">
-      <button className="btn-ghost -ml-3 mb-2" onClick={onBack}><ArrowLeft size={18} /> Back</button>
+      <div className="mb-2 flex items-center justify-between">
+        <button className="btn-ghost -ml-3" onClick={onBack}><ArrowLeft size={18} /> Back</button>
+        <ThemeSwitch compact />
+      </div>
       <div className="text-xs font-bold tracking-widest text-green-700 dark:text-green-400">FINAL RESULTS</div>
       <h1 className="text-2xl font-extrabold">{s.name}</h1>
       <p className="text-sm text-slate-500">{fmtDate(s.createdAt)} · {sum.matches} games · {fmtDuration(sum.durationMs)}</p>

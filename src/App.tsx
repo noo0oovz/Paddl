@@ -10,6 +10,7 @@ import Live from './components/Live'
 import Standings from './components/Standings'
 import History from './components/History'
 import Summary from './components/Summary'
+import ThemeSwitch from './components/ThemeSwitch'
 
 type Tab = 'live' | 'standings' | 'history'
 
@@ -52,6 +53,7 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
           </button>
         ))}
         <div className="mt-auto space-y-1">
+          <div className="pb-1"><ThemeSwitch /></div>
           <button className="btn-ghost w-full justify-start" onClick={() => openSession(null)}><HomeIcon size={18} /> All sessions</button>
           <button className="btn-danger w-full" onClick={finish}><Flag size={18} /> End session</button>
         </div>
@@ -63,7 +65,10 @@ function Shell({ s, tab, setTab }: { s: Session; tab: Tab; setTab: (t: Tab) => v
             <div className="truncate text-base font-extrabold leading-tight">{s.name}</div>
             <div className="text-[11px] text-slate-500">{MODE_INFO[s.config.mode].label} · tap for all sessions</div>
           </button>
-          <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeSwitch compact />
+            <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
+          </div>
         </header>
 
         <main className="flex-1 pb-20 md:pb-0">
@@ -89,7 +94,8 @@ function Home({ onNew }: { onNew: () => void }) {
   const live = sessions.filter((s) => !s.endedAt)
   const past = sessions.filter((s) => s.endedAt)
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pt-8 pb-16">
+    <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-16">
+      <div className="mb-4 flex justify-end"><ThemeSwitch /></div>
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-green-600 text-3xl shadow-lg">🥒</div>
         <h1 className="text-4xl font-extrabold tracking-tight">Paddl</h1>

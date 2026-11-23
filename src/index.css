@@ -1,7 +1,14 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by a .dark class on <html> (set from the theme switch, or the OS when on "System"). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+
+:root.dark {
+  color-scheme: dark;
 }
 
 html,

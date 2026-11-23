@@ -11,6 +11,15 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Paddl" />
     <title>Paddl - Pickleball Queue</title>
+    <script>
+      // Set the theme before first paint so there is no light/dark flash.
+      try {
+        var t = localStorage.getItem('paddl:theme') || 'system'
+        if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

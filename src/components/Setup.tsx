@@ -4,6 +4,7 @@ import { createSession, sessionReady, type NewPlayer } from '../engine/session'
 import { DEFAULT_CONFIG, FORMAT_INFO, MODE_INFO, type Config, type Format, type Mode } from '../engine/types'
 import { addSession, useData } from '../store'
 import { Segmented, Stepper, Toggle } from './ui'
+import ThemeSwitch from './ThemeSwitch'
 
 const LEVELS = [2.5, 3, 3.5, 4, 4.5, 5]
 
@@ -59,7 +60,10 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-32">
-      <button className="btn-ghost -ml-3 mb-2" onClick={onCancel}><ArrowLeft size={18} /> Back</button>
+      <div className="mb-2 flex items-center justify-between">
+        <button className="btn-ghost -ml-3" onClick={onCancel}><ArrowLeft size={18} /> Back</button>
+        <ThemeSwitch compact />
+      </div>
       <h1 className="text-2xl font-extrabold">New session</h1>
 
       <div className="mt-5 space-y-5">
