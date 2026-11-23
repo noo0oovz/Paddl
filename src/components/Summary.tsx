@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useState } from 'react'
+import { forwardRef, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, Download, Share2, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
@@ -7,92 +7,116 @@ import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
 import { removeSession } from '../store'
 import { medal } from './Standings'
 
-const C = { ink: '#0f172a', mute: '#64748b', line: '#e2e8f0', soft: '#f1f5f9', green: '#16a34a', dark: '#14532d', gold: '#f59e0b' }
+const C = { ink: '#0f172a', mute: '#64748b', line: '#e2e8f0', soft: '#f1f5f9', green: '#16a34a', dark: '#14532d' }
 
-/** Fixed-width, always-light card that gets rendered to PNG. Inline styles keep it identical in any theme. */
-export const ShareCard = forwardRef<HTMLDivElement, { s: Session }>(function ShareCard({ s }, ref) {
-  const rows = standings(s)
+export type Part = 'standings' | 'participation' | 'history'
+
+const PARTS: { id: Part; title: string; label: string }[] = [
+  { id: 'standings', title: 'FINAL STANDINGS', label: 'Final standings' },
+  { id: 'participation', title: 'GAMES PARTICIPATION', label: 'Games participation' },
+  { id: 'history', title: 'MATCH HISTORY', label: 'Match history' },
+]
+
+function Frame({ s, title, children }: { s: Session; title: string; children: ReactNode }) {
   const sum = summarize(s)
-  const maxGames = Math.max(1, ...rows.map((r) => r.eligible))
-  const history = [...s.matches].sort((a, b) => a.seq - b.seq)
   return (
-    <div ref={ref} style={{ width: 720, background: '#ffffff', color: C.ink, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}>
-      <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.dark})`, color: '#fff', padding: '28px 32px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, opacity: 0.85 }}>PADDL · FINAL RESULTS</div>
+    <>
+      <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.dark})`, color: '#fff', padding: '26px 32px' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, opacity: 0.85 }}>PADDL · {title}</div>
         <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
         <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
           {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
         </div>
       </div>
-
-      <div style={{ padding: '24px 32px 8px' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: C.mute, marginBottom: 10 }}>FINAL STANDINGS</div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
-          <thead>
-            <tr style={{ color: C.mute, fontSize: 11, textAlign: 'right' }}>
-              <th style={{ textAlign: 'left', padding: '4px 6px', width: 36 }}>#</th>
-              <th style={{ textAlign: 'left', padding: '4px 6px' }}>PLAYER</th>
-              <th style={{ padding: '4px 6px' }}>W</th>
-              <th style={{ padding: '4px 6px' }}>L</th>
-              <th style={{ padding: '4px 6px' }}>WIN %</th>
-              <th style={{ padding: '4px 6px' }}>+/−</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id} style={{ borderTop: `1px solid ${C.line}`, background: i === 0 && r.wins > 0 ? '#fffbeb' : undefined, textAlign: 'right' }}>
-                <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800 }}>{medal(i)}</td>
-                <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
-                <td style={{ padding: '8px 6px' }}>{r.wins}</td>
-                <td style={{ padding: '8px 6px' }}>{r.losses}</td>
-                <td style={{ padding: '8px 6px' }}>{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
-                <td style={{ padding: '8px 6px', color: r.diff > 0 ? C.green : r.diff < 0 ? '#dc2626' : C.mute, fontWeight: 600 }}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={{ padding: '16px 32px 8px' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: C.mute, marginBottom: 10 }}>GAMES PARTICIPATION</div>
-        {[...rows].sort((a, b) => b.played - a.played || a.name.localeCompare(b.name)).map((r) => (
-          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, fontSize: 14 }}>
-            <div style={{ width: 130, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-            <div style={{ flex: 1, height: 14, background: C.soft, borderRadius: 7, overflow: 'hidden', display: 'flex' }}>
-              <div style={{ width: `${(r.played / maxGames) * 100}%`, background: C.green }} />
-              <div style={{ width: `${(r.satOut / maxGames) * 100}%`, background: '#cbd5e1' }} />
-            </div>
-            <div style={{ width: 92, textAlign: 'right', color: C.mute, fontSize: 13 }}><b style={{ color: C.ink }}>{r.played}</b> played{r.satOut ? ` · ${r.satOut} sat` : ''}</div>
-          </div>
-        ))}
-      </div>
-
-      {(sum.bestDuo || sum.biggestWin || sum.hotStreak) && (
-        <div style={{ padding: '12px 32px 4px', display: 'flex', gap: 10 }}>
-          {sum.bestDuo && <Fact label="BEST DUO" value={join(sum.bestDuo.ids.map((id) => nameOf(s, id)))} sub={`${sum.bestDuo.wins}-${sum.bestDuo.losses} together`} />}
-          {sum.hotStreak && <Fact label="HOT STREAK" value={sum.hotStreak.name} sub={`${sum.hotStreak.longestStreak} wins in a row`} />}
-          {sum.biggestWin && <Fact label="BIGGEST WIN" value={`${sum.biggestWin.scoreA}–${sum.biggestWin.scoreB}`} sub={join((sum.biggestWin.winner === 'a' ? sum.biggestWin.a : sum.biggestWin.b).map((id) => nameOf(s, id)))} />}
-        </div>
-      )}
-
-      <div style={{ padding: '16px 32px 8px' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: C.mute, marginBottom: 10 }}>MATCH HISTORY</div>
-        {history.length === 0 && <div style={{ color: C.mute, fontSize: 14 }}>No games were recorded.</div>}
-        {history.map((m) => (
-          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid ${C.line}`, fontSize: 13.5 }}>
-            <div style={{ width: 28, color: C.mute, fontWeight: 700 }}>#{m.seq}</div>
-            <div style={{ flex: 1, textAlign: 'right', fontWeight: m.winner === 'a' ? 800 : 500, color: m.winner === 'b' ? C.mute : C.ink }}>{join(m.a.map((id) => nameOf(s, id)))}</div>
-            <div style={{ minWidth: 64, textAlign: 'center', fontWeight: 800, background: C.soft, borderRadius: 8, padding: '3px 6px' }}>
-              {m.scoreA !== null ? `${m.scoreA} – ${m.scoreB}` : m.winner ? (m.winner === 'a' ? '✓ – ' : ' – ✓') : 'N/C'}
-            </div>
-            <div style={{ flex: 1, textAlign: 'left', fontWeight: m.winner === 'b' ? 800 : 500, color: m.winner === 'a' ? C.mute : C.ink }}>{join(m.b.map((id) => nameOf(s, id)))}</div>
-          </div>
-        ))}
-      </div>
-
+      <div style={{ padding: '22px 32px 8px' }}>{children}</div>
       <div style={{ padding: '14px 32px 20px', color: C.mute, fontSize: 12, textAlign: 'center', borderTop: `1px solid ${C.line}`, marginTop: 8 }}>
         Made with Paddl · {fmtTime(s.endedAt ?? Date.now())}
       </div>
+    </>
+  )
+}
+
+/** Fixed-width, always-light card that gets rendered to PNG. Inline styles keep it identical in any theme. */
+export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
+  const rows = standings(s)
+  const sum = summarize(s)
+  const maxGames = Math.max(1, ...rows.map((r) => r.eligible))
+  const history = [...s.matches].sort((a, b) => a.seq - b.seq)
+  const info = PARTS.find((p) => p.id === part)!
+  return (
+    <div ref={ref} style={{ width: 720, background: '#ffffff', color: C.ink, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}>
+      <Frame s={s} title={info.title}>
+        {part === 'standings' && (
+          <>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
+              <thead>
+                <tr style={{ color: C.mute, fontSize: 11, textAlign: 'right' }}>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', width: 36 }}>#</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px' }}>PLAYER</th>
+                  <th style={{ padding: '4px 6px' }}>W</th>
+                  <th style={{ padding: '4px 6px' }}>L</th>
+                  <th style={{ padding: '4px 6px' }}>WIN %</th>
+                  <th style={{ padding: '4px 6px' }}>+/−</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, i) => (
+                  <tr key={r.id} style={{ borderTop: `1px solid ${C.line}`, background: i === 0 && r.wins > 0 ? '#fffbeb' : undefined, textAlign: 'right' }}>
+                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800 }}>{medal(i)}</td>
+                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
+                    <td style={{ padding: '8px 6px' }}>{r.wins}</td>
+                    <td style={{ padding: '8px 6px' }}>{r.losses}</td>
+                    <td style={{ padding: '8px 6px' }}>{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
+                    <td style={{ padding: '8px 6px', color: r.diff > 0 ? C.green : r.diff < 0 ? '#dc2626' : C.mute, fontWeight: 600 }}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {(sum.bestDuo || sum.biggestWin || sum.hotStreak) && (
+              <div style={{ paddingTop: 18, display: 'flex', gap: 10 }}>
+                {sum.bestDuo && <Fact label="BEST DUO" value={join(sum.bestDuo.ids.map((id) => nameOf(s, id)))} sub={`${sum.bestDuo.wins}-${sum.bestDuo.losses} together`} />}
+                {sum.hotStreak && <Fact label="HOT STREAK" value={sum.hotStreak.name} sub={`${sum.hotStreak.longestStreak} wins in a row`} />}
+                {sum.biggestWin && <Fact label="BIGGEST WIN" value={`${sum.biggestWin.scoreA}–${sum.biggestWin.scoreB}`} sub={join((sum.biggestWin.winner === 'a' ? sum.biggestWin.a : sum.biggestWin.b).map((id) => nameOf(s, id)))} />}
+              </div>
+            )}
+          </>
+        )}
+
+        {part === 'participation' && (
+          <>
+            {[...rows].sort((a, b) => b.played - a.played || a.name.localeCompare(b.name)).map((r) => (
+              <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9, fontSize: 15 }}>
+                <div style={{ width: 130, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
+                <div style={{ flex: 1, height: 16, background: C.soft, borderRadius: 8, overflow: 'hidden', display: 'flex' }}>
+                  <div style={{ width: `${(r.played / maxGames) * 100}%`, background: C.green }} />
+                  <div style={{ width: `${(r.satOut / maxGames) * 100}%`, background: '#cbd5e1' }} />
+                </div>
+                <div style={{ width: 100, textAlign: 'right', color: C.mute, fontSize: 13 }}><b style={{ color: C.ink }}>{r.played}</b> played{r.satOut ? ` · ${r.satOut} sat` : ''}</div>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: C.mute }}>
+              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: C.green, borderRadius: 3, marginRight: 5 }} />Games played</span>
+              <span><i style={{ display: 'inline-block', width: 10, height: 10, background: '#cbd5e1', borderRadius: 3, marginRight: 5 }} />Sat out</span>
+            </div>
+          </>
+        )}
+
+        {part === 'history' && (
+          <>
+            {history.length === 0 && <div style={{ color: C.mute, fontSize: 14 }}>No games were recorded.</div>}
+            {history.map((m) => (
+              <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: `1px solid ${C.line}`, fontSize: 14 }}>
+                <div style={{ width: 30, color: C.mute, fontWeight: 700 }}>#{m.seq}</div>
+                <div style={{ flex: 1, textAlign: 'right', fontWeight: m.winner === 'a' ? 800 : 500, color: m.winner === 'b' ? C.mute : C.ink }}>{join(m.a.map((id) => nameOf(s, id)))}</div>
+                <div style={{ minWidth: 70, textAlign: 'center', fontWeight: 800, background: C.soft, borderRadius: 8, padding: '3px 6px' }}>
+                  {m.scoreA !== null ? `${m.scoreA} – ${m.scoreB}` : m.winner ? (m.winner === 'a' ? '✓ – ' : ' – ✓') : 'N/C'}
+                </div>
+                <div style={{ flex: 1, textAlign: 'left', fontWeight: m.winner === 'b' ? 800 : 500, color: m.winner === 'a' ? C.mute : C.ink }}>{join(m.b.map((id) => nameOf(s, id)))}</div>
+              </div>
+            ))}
+          </>
+        )}
+      </Frame>
     </div>
   )
 })
@@ -107,41 +131,85 @@ function Fact({ label, value, sub }: { label: string; value: string; sub: string
   )
 }
 
+function partFile(s: Session, part: Part, n: number): string {
+  return fileName(s.name).replace(/\.png$/, `-${n}-${part}.png`)
+}
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
 export default function Summary({ s, onBack }: { s: Session; onBack: () => void }) {
-  const cardRef = useRef<HTMLDivElement>(null)
+  const refs = useRef<Record<Part, HTMLDivElement | null>>({ standings: null, participation: null, history: null })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const sum = summarize(s)
   const top = standings(s).slice(0, 3)
 
-  async function make(): Promise<Blob | null> {
-    if (!cardRef.current) return null
+  async function makeOne(part: Part): Promise<Blob> {
+    const node = refs.current[part]
+    if (!node) throw new Error('missing card')
+    return renderPng(node)
+  }
+
+  async function makeAll(): Promise<{ part: Part; blob: Blob; name: string }[] | null> {
     setBusy(true)
     setMsg(null)
     try {
-      return await renderPng(cardRef.current)
+      const out: { part: Part; blob: Blob; name: string }[] = []
+      for (const [i, p] of PARTS.entries()) out.push({ part: p.id, blob: await makeOne(p.id), name: partFile(s, p.id, i + 1) })
+      return out
     } catch {
-      setMsg('Could not create the image. Try again.')
+      setMsg('Could not create the images. Try again.')
       return null
     } finally {
       setBusy(false)
     }
   }
 
-  async function save() {
-    const blob = await make()
-    if (blob) { download(blob, fileName(s.name)); setMsg('Image saved to your downloads.') }
+  async function saveAll() {
+    const all = await makeAll()
+    if (!all) return
+    for (const f of all) {
+      download(f.blob, f.name)
+      await wait(350) // browsers drop downloads fired in the same tick
+    }
+    setMsg('Saved 3 images: standings, participation and match history.')
   }
 
-  async function share() {
-    const blob = await make()
-    if (!blob) return
-    const name = fileName(s.name)
-    if (canShareFile(blob, name)) {
-      try { await shareImage(blob, name, s.name) } catch { download(blob, name); setMsg('Sharing is not available here, so the image was saved instead.') }
-    } else {
-      download(blob, name)
-      setMsg('Image saved to your downloads.')
+  async function shareAll() {
+    const all = await makeAll()
+    if (!all) return
+    const files = all.map((f) => new File([f.blob], f.name, { type: 'image/png' }))
+    try {
+      if (navigator.canShare?.({ files })) {
+        await navigator.share({ files, title: s.name })
+        return
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return
+    }
+    for (const f of all) {
+      download(f.blob, f.name)
+      await wait(350)
+    }
+    setMsg('Sharing is not available here, so the 3 images were saved instead.')
+  }
+
+  async function saveOne(part: Part, n: number) {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const blob = await makeOne(part)
+      const name = partFile(s, part, n)
+      if (canShareFile(blob, name) && typeof navigator.share === 'function' && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        await shareImage(blob, name, s.name)
+      } else {
+        download(blob, name)
+        setMsg('Image saved.')
+      }
+    } catch {
+      setMsg('Could not create the image. Try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -165,16 +233,26 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       )}
 
       <div className="sticky top-0 z-10 -mx-4 mt-4 flex gap-2 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-        <button className="btn-primary flex-1 !min-h-12" onClick={save} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save image'}</button>
+        <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save images (3)'}</button>
         {typeof navigator !== 'undefined' && 'share' in navigator && (
-          <button className="btn-soft flex-1 !min-h-12" onClick={share} disabled={busy}><Share2 size={18} /> Share</button>
+          <button className="btn-soft flex-1 !min-h-12" onClick={shareAll} disabled={busy}><Share2 size={18} /> Share</button>
         )}
       </div>
       {msg && <p className="mt-2 text-sm font-medium text-green-700 dark:text-green-400" role="status">{msg}</p>}
 
-      <p className="mt-4 mb-2 text-xs text-slate-500">This is the image that will be saved:</p>
-      <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800">
-        <div className="mx-auto w-fit"><ShareCard ref={cardRef} s={s} /></div>
+      <p className="mt-4 mb-2 text-xs text-slate-500">Save images creates these three pictures. Tap one to save just that image.</p>
+      <div className="space-y-5">
+        {PARTS.map((p, i) => (
+          <div key={p.id}>
+            <div className="mb-1.5 flex items-center justify-between">
+              <div className="text-sm font-bold">{i + 1}. {p.label}</div>
+              <button className="btn-soft !min-h-9 !px-3" onClick={() => saveOne(p.id, i + 1)} disabled={busy}><Download size={15} /> Save</button>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800">
+              <div className="mx-auto w-fit"><ShareCard ref={(el) => { refs.current[p.id] = el }} s={s} part={p.id} /></div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <button

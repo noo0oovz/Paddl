@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Ban, Clock, Crown, Moon, Plus, Undo2, UserPlus, Users } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Plus, Undo2, UserPlus, Users } from 'lucide-react'
 import type { Court, Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, gamesOf, nameOf } from '../engine/stats'
 import {
-  addPlayer, addTeam, cancelMatch, finishMatch, renamePlayer, setCourts, setLevel, setStatus, substitute, nameTaken, type Result,
+  addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, renamePlayer, sendBack, setCourts, setLevel,
+  setStatus, substitute, nameTaken, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
 import { undo, updateActive, useData } from '../store'
@@ -17,6 +18,7 @@ export default function Live({ s }: { s: Session }) {
   const [scoring, setScoring] = useState<string | null>(null)
   const [people, setPeople] = useState(false)
   const [subFor, setSubFor] = useState<{ court: string; id: string } | null>(null)
+  const [waitFor, setWaitFor] = useState<string | null>(null)
 
   const counts = countMatches(s.matches)
   const waiting = waitingUnits(s)
@@ -43,6 +45,7 @@ export default function Live({ s }: { s: Session }) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
+          <NextMatch s={s} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} />
           <div className="grid gap-4 sm:grid-cols-2">
             {s.courts.map((c) => (
               <CourtCard key={c.id} s={s} c={c} now={now} onScore={() => setScoring(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} />
@@ -85,12 +88,14 @@ export default function Live({ s }: { s: Session }) {
             )}
             {waiting.length > 0 && (
               <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                <div className="mb-1.5 text-xs font-semibold text-slate-500">Waiting line</div>
+                <div className="mb-1.5 text-xs font-semibold text-slate-500">Waiting line (tap a name to move or pull in)</div>
                 <div className="flex flex-wrap gap-1.5">
                   {waiting.map((u) => (
-                    <span key={u.key} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium dark:bg-slate-800">
+                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                      {u.pri < 0 && <span title="Playing next">⏭ </span>}
+                      {u.pri > 0 && <span title="Sent to back">⏬ </span>}
                       {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, gamesOf(p, counts)), 0)}</span>
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -114,6 +119,7 @@ export default function Live({ s }: { s: Session }) {
 
       {court?.match && <ScoreSheet s={s} court={court} onClose={() => setScoring(null)} />}
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
+      {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
       {subFor && <SubSheet s={s} courtId={subFor.court} outId={subFor.id} onClose={() => setSubFor(null)} />}
     </div>
   )
@@ -253,11 +259,16 @@ function SubSheet({ s, courtId, outId, onClose }: { s: Session; courtId: string;
   const counts = countMatches(s.matches)
   const teams = s.config.format === 'teams'
   return (
-    <Sheet title={`Swap ${nameOf(s, outId)}`} onClose={onClose}>
+    <Sheet title={`${nameOf(s, outId)} is on court`} onClose={onClose}>
       <div className="space-y-3">
+        {waiting.length > 0 && (
+          <button className="btn-primary w-full" onClick={() => { updateActive((x) => pullOut(x, outId)); onClose() }}>
+            <LogOut size={18} /> Pull out: next in line takes over
+          </button>
+        )}
         {!teams && (
           <>
-            <p className="text-sm text-slate-500">Pick who takes over on court:</p>
+            <p className="text-sm text-slate-500">Or pull in someone specific (they replace {nameOf(s, outId)}, who goes back in line):</p>
             {waiting.length === 0 && <p className="text-sm font-medium">Nobody is waiting.</p>}
             <div className="grid grid-cols-2 gap-2">
               {waiting.map((id) => (
@@ -337,6 +348,112 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
           ))}
         </ul>
         {s.players.length === 0 && <Empty title="No players yet" />}
+      </div>
+    </Sheet>
+  )
+}
+
+function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick }: {
+  s: Session
+  upcoming: ReturnType<typeof previewQueue>
+  freeCourts: number
+  waiting: number
+  need: number
+  onPick: (id: string) => void
+}) {
+  const next = upcoming[0]
+  const winners = s.config.mode === 'winners'
+  const unitWord = s.config.format === 'teams' ? 'teams' : 'players'
+  return (
+    <section className="card border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">Next match</h2>
+        <span className="text-xs text-slate-500">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
+      </div>
+      {next ? (
+        <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto_1fr]">
+          <TeamBox s={s} ids={next.a} onPick={onPick} />
+          <div className="text-center text-xs font-bold tracking-widest text-slate-400">{next.b ? 'VS' : 'CHALLENGE'}</div>
+          {next.b ? (
+            <TeamBox s={s} ids={next.b} onPick={onPick} />
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 p-3 text-center text-sm text-slate-500 dark:border-slate-600">the winners holding the court</div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          {waiting === 0
+            ? 'Everyone is on court right now.'
+            : winners
+              ? 'Waiting for a challenger.'
+              : `Need ${Math.max(1, need - waiting)} more ${unitWord} to make the next match.`}
+        </p>
+      )}
+      {next && upcoming[1] && (
+        <p className="mt-2 truncate text-xs text-slate-500">
+          Then: {join(upcoming[1].a.map((id) => nameOf(s, id)))}
+          {upcoming[1].b ? ` vs ${join(upcoming[1].b.map((id) => nameOf(s, id)))}` : ''}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function TeamBox({ s, ids, onPick }: { s: Session; ids: string[]; onPick: (id: string) => void }) {
+  return (
+    <div className={`grid gap-1.5 ${ids.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {ids.map((id) => (
+        <button key={id} onClick={() => onPick(id)} className="min-h-11 truncate rounded-xl bg-white px-3 py-2 text-center font-bold shadow-sm dark:bg-slate-800">
+          {nameOf(s, id)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function WaitSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => void }) {
+  const p = s.players.find((x) => x.id === id)
+  const teams = s.config.format === 'teams'
+  const live = s.courts.filter((c) => c.match)
+  const done = (fn: (x: Session) => Session) => {
+    updateActive(fn)
+    onClose()
+  }
+  if (!p) return null
+  const title = teams ? (s.teams.find((t) => t.playerIds.includes(id))?.name ?? p.name) : p.name
+  return (
+    <Sheet title={title} onClose={onClose}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-primary" onClick={() => done((x) => playNext(x, id))}><ArrowUpToLine size={18} /> Play next</button>
+          <button className="btn-soft" onClick={() => done((x) => sendBack(x, id))}><ArrowDownToLine size={18} /> Send to back</button>
+        </div>
+        {p.prio && <button className="btn-ghost w-full" onClick={() => done((x) => clearPriority(x, id))}>Reset to normal position</button>}
+
+        <div>
+          <div className="label">Pull into a game now</div>
+          {live.length === 0 && <p className="text-sm text-slate-500">No games are running.</p>}
+          <div className="space-y-3">
+            {live.map((c) => (
+              <div key={c.id} className="rounded-xl border border-slate-200 p-2 dark:border-slate-700">
+                <div className="mb-1.5 text-xs font-semibold text-slate-500">{c.name}: replace who?</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[...c.match!.a, ...c.match!.b].map((outId) => (
+                    <button key={outId} className="btn-soft !min-h-10 truncate" onClick={() => done((x) => substitute(x, c.id, outId, id))}>
+                      <LogIn size={14} /> {nameOf(s, outId)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {teams && <p className="mt-1 text-xs text-slate-500">The whole team comes in and replaces the team on that side.</p>}
+        </div>
+
+        <div className="flex gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+          <button className="btn-soft flex-1" onClick={() => done((x) => setStatus(x, id, 'resting'))}><Moon size={16} /> Take a break</button>
+          <button className="btn-ghost flex-1 text-red-600" onClick={() => { if (confirm(`${p.name} has left for the day?`)) done((x) => setStatus(x, id, 'left')) }}>Left</button>
+        </div>
       </div>
     </Sheet>
   )

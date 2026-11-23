@@ -19,6 +19,8 @@ export interface Player {
   level: number // 2.0 - 5.5 skill rating
   status: Status
   baseGames: number // credited games (late join / return from rest)
+  prio?: 'front' | 'back' // manual queue override: "play next" / "send to back"
+  prioAt?: number // ordering among overrides
   lastPlayed: number // session.seq when last finished a game or joined the queue
   intervals: [number, number | null][] // seq ranges during which the player was active
 }

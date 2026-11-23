@@ -94,10 +94,12 @@ export function fill(input: Session): Session {
       if (!ch) continue
       court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak }
       court.hold = null
+      clearPrio(s, ch)
     } else {
       const m = proposeMatch(s, exclude, counts)
       if (!m) continue
       court.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
+      clearPrio(s, [...m.a, ...m.b])
     }
   }
   return s
@@ -181,6 +183,8 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
     const wasActive = p.status === 'active'
     if (wasActive) {
       p.status = status
+      delete p.prio
+      delete p.prioAt
       close(p, d.seq)
       release(d, id)
       if (d.config.format === 'teams') {
@@ -202,15 +206,69 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
   })
 }
 
-/** Replace one player on a live court with another waiting player. */
+function clearPrio(d: Session, ids: string[]) {
+  for (const p of d.players) {
+    if (ids.includes(p.id)) { delete p.prio; delete p.prioAt }
+  }
+}
+
+/** The players that move as one: a fixed team, or just the player. */
+function unitIds(d: Session, id: string): string[] {
+  if (d.config.format === 'teams') {
+    const t = d.teams.find((x) => x.playerIds.includes(id))
+    if (t) return [...t.playerIds]
+  }
+  return [id]
+}
+
+/** Pull a waiting player (or team) into a live court, replacing `outId` (or their team). `outId` goes back to the queue. */
 export function substitute(s: Session, courtId: string, outId: string, inId: string): Session {
   return mutate(s, (d) => {
     const c = d.courts.find((x) => x.id === courtId)
-    if (!c?.match || busyIds(d).has(inId)) return
-    const swap = (ids: string[]) => ids.map((x) => (x === outId ? inId : x))
-    c.match = { ...c.match, a: swap(c.match.a), b: swap(c.match.b) }
+    if (!c?.match) return
+    const inIds = unitIds(d, inId)
+    const busy = busyIds(d)
+    const byId = new Map(d.players.map((p) => [p.id, p]))
+    if (inIds.some((id) => busy.has(id) || byId.get(id)?.status !== 'active')) return
+    const m = c.match
+    const outIds = unitIds(d, outId)
+    if (d.config.format === 'teams') {
+      const side = m.a.includes(outId) ? 'a' : 'b'
+      m[side] = inIds
+    } else {
+      const swap = (ids: string[]) => ids.map((x) => (x === outId ? inId : x))
+      m.a = swap(m.a)
+      m.b = swap(m.b)
+    }
+    clearPrio(d, [...inIds, ...outIds])
+    for (const p of d.players) if (outIds.includes(p.id)) p.lastPlayed = d.seq
   })
 }
+
+/** Pull a player off a live court; the next person in line takes their place. No-op if nobody is waiting. */
+export function pullOut(s: Session, id: string): Session {
+  const court = courtOf(s, id)
+  const sub = waitingUnits(s).find((u) => !u.ids.includes(id))
+  if (!court || !sub) return s
+  return substitute(s, court.id, id, sub.ids[0])
+}
+
+function setPrio(s: Session, id: string, prio: 'front' | 'back' | null): Session {
+  return mutate(s, (d) => {
+    const ids = unitIds(d, id)
+    const at = d.nextId++
+    for (const p of d.players) {
+      if (!ids.includes(p.id)) continue
+      if (prio) { p.prio = prio; p.prioAt = at } else { delete p.prio; delete p.prioAt }
+    }
+  })
+}
+
+/** Move a waiting player (or team) to the front of the line. */
+export const playNext = (s: Session, id: string) => setPrio(s, id, 'front')
+/** Move a waiting player (or team) behind everyone else. */
+export const sendBack = (s: Session, id: string) => setPrio(s, id, 'back')
+export const clearPriority = (s: Session, id: string) => setPrio(s, id, null)
 
 /** Abandon the game on a court without recording it; everyone returns to the queue. */
 export function cancelMatch(s: Session, courtId: string): Session {

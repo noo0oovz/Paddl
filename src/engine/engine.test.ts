@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, setCourts, setStatus,
+  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, sendBack, setCourts, setStatus, substitute,
 } from './session'
 import { standings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
@@ -309,5 +309,73 @@ describe('courts and sessions', () => {
     s = simulate(s, 3)
     const p8 = standings(s).find((p) => p.id === 'p8')!
     expect(p8.eligible).toBeLessThanOrEqual(3)
+  })
+})
+
+describe('pull in / pull out', () => {
+  it('play next puts a waiting player into the next match', () => {
+    let s = createSession('t', { courts: 1 }, names(12))
+    const waitingId = previewQueue(s, 2)[1].a[0]
+    expect(previewQueue(s, 1)[0].a.concat(previewQueue(s, 1)[0].b!)).not.toContain(waitingId)
+    s = playNext(s, waitingId)
+    const next = previewQueue(s, 1)[0]
+    expect([...next.a, ...next.b!]).toContain(waitingId)
+  })
+
+  it('send to back keeps a player out of the next match while others wait', () => {
+    let s = createSession('t', { courts: 1 }, names(10))
+    const first = previewQueue(s, 1)[0]
+    const id = first.a[0]
+    s = sendBack(s, id)
+    const next = previewQueue(s, 1)[0]
+    expect([...next.a, ...next.b!]).not.toContain(id)
+  })
+
+  it('pull out swaps the next in line onto the court and the player goes back to the queue', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    const out = s.courts[0].match!.a[0]
+    s = pullOut(s, out)
+    const onCourt = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    expect(onCourt).not.toContain(out)
+    expect(onCourt).toHaveLength(4)
+    expect(previewQueue(s, 1).length + 0).toBeGreaterThanOrEqual(0)
+    expect(s.players.find((p) => p.id === out)!.status).toBe('active')
+  })
+
+  it('pull out does nothing when nobody is waiting', () => {
+    const s = createSession('t', { courts: 1 }, names(4))
+    const out = s.courts[0].match!.a[0]
+    expect(pullOut(s, out)).toBe(s)
+  })
+
+  it('pull in replaces the chosen player during a live match', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    const waitingId = s.players.map((p) => p.id).find((id) => ![...s.courts[0].match!.a, ...s.courts[0].match!.b].includes(id))!
+    const out = s.courts[0].match!.b[1]
+    s = substitute(s, s.courts[0].id, out, waitingId)
+    const m = s.courts[0].match!
+    expect(m.b).toContain(waitingId)
+    expect([...m.a, ...m.b]).not.toContain(out)
+  })
+
+  it('cannot pull in someone already on court or on a break', () => {
+    let s = createSession('t', { courts: 2 }, names(10))
+    const other = s.courts[1].match!.a[0]
+    const out = s.courts[0].match!.a[0]
+    const same = substitute(s, s.courts[0].id, out, other)
+    expect(same.courts[0].match!.a).toContain(out)
+    const waitingId = s.players.map((p) => p.id).find((id) => !s.courts.some((c) => [...c.match!.a, ...c.match!.b].includes(id)))!
+    s = setStatus(s, waitingId, 'resting')
+    expect(substitute(s, s.courts[0].id, out, waitingId).courts[0].match!.a).toContain(out)
+  })
+
+  it('pulling in a fixed team replaces the whole team on that side', () => {
+    const pairs = [0, 1, 2, 3].map((i) => [{ name: `A${i}` }, { name: `B${i}` }] as [{ name: string }, { name: string }])
+    let s = createSession('t', { format: 'teams', courts: 1 }, [], pairs)
+    const m = s.courts[0].match!
+    const waitingTeam = s.teams.find((t) => ![...m.a, ...m.b].includes(t.playerIds[0]))!
+    s = substitute(s, s.courts[0].id, m.b[0], waitingTeam.playerIds[0])
+    expect(s.courts[0].match!.b.slice().sort()).toEqual([...waitingTeam.playerIds].sort())
+    expect(s.courts[0].match!.a).toEqual(m.a)
   })
 })

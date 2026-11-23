@@ -8,6 +8,13 @@ export interface Unit {
   last: number
   level: number
   key: string
+  pri: number // -1 = play next, 0 = normal, 1 = sent to back
+  pAt: number
+}
+
+function priOf(ps: Player[]): { pri: number; pAt: number } {
+  const pri = ps.some((p) => p.prio === 'front') ? -1 : ps.some((p) => p.prio === 'back') ? 1 : 0
+  return { pri, pAt: Math.max(0, ...ps.map((p) => p.prioAt ?? 0)) }
 }
 
 export interface Proposal {
@@ -53,23 +60,27 @@ export function availableUnits(s: Session, exclude: Set<string>, counts: Counts)
         last: Math.max(...live.map((p) => p.lastPlayed)),
         level: live[0].level + live[1].level,
         key: t.id,
+        ...priOf(live),
       })
     }
     return out
   }
   return s.players
     .filter((p) => ok(p))
-    .map((p) => ({ ids: [p.id], games: gamesOf(p, counts), last: p.lastPlayed, level: p.level, key: p.id }))
+    .map((p) => ({ ids: [p.id], games: gamesOf(p, counts), last: p.lastPlayed, level: p.level, key: p.id, ...priOf([p]) }))
 }
 
 /** Queue order: winners-stay is first-come-first-served; the rest favour fewest games, then longest wait. */
 export function sortUnits(s: Session, units: Unit[], mode: Mode): Unit[] {
   const salt = String(Math.floor(s.seq))
   const tie = (x: Unit, y: Unit) => hash(x.key + salt) - hash(y.key + salt)
-  return [...units].sort((x, y) =>
-    mode === 'winners'
-      ? x.last - y.last || x.games - y.games || tie(x, y)
-      : x.games - y.games || x.last - y.last || tie(x, y),
+  return [...units].sort(
+    (x, y) =>
+      x.pri - y.pri ||
+      (x.pri !== 0 ? x.pAt - y.pAt : 0) ||
+      (mode === 'winners'
+        ? x.last - y.last || x.games - y.games || tie(x, y)
+        : x.games - y.games || x.last - y.last || tie(x, y)),
   )
 }
 
@@ -136,17 +147,24 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
   const units = sortUnits(s, availableUnits(s, exclude, counts), s.config.mode)
   if (units.length < need) return null
 
+  // Manual overrides: "play next" players are forced in, "sent to back" players only fill leftover spots.
+  const front = units.filter((u) => u.pri < 0).slice(0, need)
+  const normal = units.filter((u) => u.pri === 0)
+  const back = units.filter((u) => u.pri > 0)
+  const r = need - front.length
   let candidates: Unit[][]
   let rankOf = (_: Unit) => 0
-  if (s.config.mode === 'winners') {
-    candidates = [units.slice(0, need)]
+  if (r === 0) {
+    candidates = [front]
+  } else if (s.config.mode === 'winners' || normal.length < r) {
+    candidates = [[...front, ...[...normal, ...back].slice(0, r)]]
   } else {
     // Everyone with fewer games than the cut-off is guaranteed a spot; the rest is chosen among ties.
-    const cutoff = units[need - 1].games
-    const must = units.filter((u) => u.games < cutoff)
-    const tied = units.filter((u) => u.games === cutoff).slice(0, 8)
+    const cutoff = normal[r - 1].games
+    const must = normal.filter((u) => u.games < cutoff)
+    const tied = normal.filter((u) => u.games === cutoff).slice(0, 8)
     rankOf = (u) => tied.indexOf(u)
-    candidates = combos(tied, need - must.length).map((c) => [...must, ...c])
+    candidates = combos(tied, r - must.length).map((c) => [...front, ...must, ...c])
   }
 
   let best: { cost: number; a: Unit[]; b: Unit[] } | null = null
