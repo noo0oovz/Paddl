@@ -74,6 +74,8 @@ export interface Session {
   matches: Match[]
   seq: number
   nextId: number
+  remix?: number // shuffle seed, bumped each time the host remixes
+  fresh?: boolean // a remix is pending: the next match drawn uses extra randomness and a wider pool
 }
 
 export const DEFAULT_CONFIG: Config = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, sendBack, setCourts, setStatus, substitute,
+  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, sendBack, setCourts, setStatus, substitute,
 } from './session'
 import { standings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
@@ -377,5 +377,77 @@ describe('pull in / pull out', () => {
     s = substitute(s, s.courts[0].id, m.b[0], waitingTeam.playerIds[0])
     expect(s.courts[0].match!.b.slice().sort()).toEqual([...waitingTeam.playerIds].sort())
     expect(s.courts[0].match!.a).toEqual(m.a)
+  })
+})
+
+describe('remix', () => {
+  const sig = (a: string[], b: string[]) => [[...a].sort().join('+'), [...b].sort().join('+')].sort().join('/')
+
+  it('remixing the next matches gives a different match-up and leaves live games alone', () => {
+    const s = createSession('t', { courts: 1 }, names(12))
+    const live = JSON.stringify(s.courts[0].match)
+    const before = previewQueue(s, 1)[0]
+    const r = remixNext(s)
+    const after = previewQueue(r, 1)[0]
+    expect(sig(after.a, after.b!)).not.toBe(sig(before.a, before.b!))
+    expect(JSON.stringify(r.courts[0].match)).toBe(live)
+  })
+
+  it('remix clears manual play-next overrides', () => {
+    let s = createSession('t', { courts: 1 }, names(12))
+    s = playNext(s, previewQueue(s, 2)[1].a[0])
+    expect(s.players.some((p) => p.prio)).toBe(true)
+    expect(remixNext(s).players.some((p) => p.prio)).toBe(false)
+  })
+
+  it('remix does not break fairness over a whole session', () => {
+    let s = createSession('t', { courts: 2 }, names(11))
+    for (let i = 0; i < 10; i++) {
+      s = simulate(s, 1)
+      if (i % 3 === 1) s = remixNext(s)
+    }
+    expect(spread(s)).toBeLessThanOrEqual(2)
+  })
+
+  it('remixing a live court redraws that game with a different line-up', () => {
+    const s = createSession('t', { courts: 1 }, names(8))
+    const old = s.courts[0].match!
+    const r = remixCourt(s, s.courts[0].id)
+    const m = r.courts[0].match!
+    expect(sig(m.a, m.b)).not.toBe(sig(old.a, old.b))
+    expect([...m.a, ...m.b]).toHaveLength(4)
+  })
+
+  it('remixing a court with only four players re-pairs them instead of swapping people in', () => {
+    const s = createSession('t', { courts: 1 }, names(4))
+    const old = s.courts[0].match!
+    const m = remixCourt(s, s.courts[0].id).courts[0].match!
+    expect([...m.a, ...m.b].sort()).toEqual([...old.a, ...old.b].sort())
+    expect(sig(m.a, m.b)).not.toBe(sig(old.a, old.b))
+  })
+
+  it('returns the same session when no different match-up exists', () => {
+    const s = createSession('t', { format: 'singles', courts: 1 }, names(2))
+    expect(remixCourt(s, s.courts[0].id)).toBe(s)
+    expect(remixNext(s)).toBe(s)
+  })
+
+  it('winners stay: remixing keeps the holders and redraws the challengers', () => {
+    let s = createSession('t', { mode: 'winners', courts: 1, maxStreak: 5 }, names(10))
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: 11, scoreB: 3 })
+    const old = s.courts[0].match!
+    const r = remixCourt(s, s.courts[0].id).courts[0].match!
+    expect(r.a).toEqual(old.a)
+    expect(r.b.slice().sort()).not.toEqual(old.b.slice().sort())
+    expect(r.streak).toBe(old.streak)
+  })
+
+  it('fixed teams: remix swaps in different teams and keeps pairs intact', () => {
+    const pairs = [0, 1, 2, 3, 4].map((i) => [{ name: `A${i}` }, { name: `B${i}` }] as [{ name: string }, { name: string }])
+    const s = createSession('t', { format: 'teams', courts: 1 }, [], pairs)
+    const old = s.courts[0].match!
+    const m = remixCourt(s, s.courts[0].id).courts[0].match!
+    expect(sig(m.a, m.b)).not.toBe(sig(old.a, old.b))
+    for (const side of [m.a, m.b]) expect(s.teams.some((t) => pairKey(t.playerIds[0], t.playerIds[1]) === pairKey(side[0], side[1]))).toBe(true)
   })
 })

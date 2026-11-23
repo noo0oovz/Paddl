@@ -1,7 +1,7 @@
 import {
   DEFAULT_CONFIG, type Config, type Court, type Live, type Match, type Player, type Session, type Team,
 } from './types'
-import { busyIds, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
+import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
 
 export const MIN_LEVEL = 2
@@ -86,6 +86,7 @@ export function fill(input: Session): Session {
   const s = input
   if (s.endedAt) return s
   const counts = countMatches(s.matches)
+  let started = false
   for (const court of s.courts) {
     if (court.match) continue
     const exclude = busyIds(s)
@@ -95,14 +96,81 @@ export function fill(input: Session): Session {
       court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak }
       court.hold = null
       clearPrio(s, ch)
+      started = true
     } else {
       const m = proposeMatch(s, exclude, counts)
       if (!m) continue
       court.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
       clearPrio(s, [...m.a, ...m.b])
+      started = true
     }
   }
+  if (started) s.fresh = false // the remix has been used up; later matches go back to strict fairness
   return s
+}
+
+const MAX_TRIES = 30
+
+/**
+ * Host remix of the upcoming matches. Re-draws the next match-up (new partners / opponents) and clears any
+ * manual "play next" / "send to back" overrides. Games already on court are untouched.
+ * Returns the same session object when no different match-up is possible.
+ */
+export function remixNext(s: Session): Session {
+  const d = clone(s)
+  const before = previewQueue(d, 1)[0]
+  const oldSig = before ? matchSig(before.a, before.b) : ''
+  const hadPrio = d.players.some((p) => p.prio)
+  for (const p of d.players) { delete p.prio; delete p.prioAt }
+  d.fresh = true
+  let changed = false
+  for (let i = 0; i < MAX_TRIES; i++) {
+    d.remix = (d.remix ?? 0) + 1
+    const n = previewQueue(d, 1)[0]
+    if (!n) break
+    if (matchSig(n.a, n.b) !== oldSig) { changed = true; break }
+  }
+  if (!changed && !hadPrio) return s
+  return fill(d)
+}
+
+/**
+ * Host remix of a game that is on a court right now: its players go back into the pool and a different
+ * match-up is drawn. In winners-stay the holding side keeps the court and only the challengers are redrawn.
+ * Returns the same session object when no different match-up is possible.
+ */
+export function remixCourt(s: Session, courtId: string): Session {
+  const d = clone(s)
+  const c = d.courts.find((x) => x.id === courtId)
+  if (!c?.match) return s
+  const old = c.match
+  const oldSig = matchSig(old.a, old.b)
+  const keep = d.config.mode === 'winners' && old.streak > 0 ? old.a : null
+  c.match = null
+  const exclude = busyIds(d)
+  if (keep) keep.forEach((id) => exclude.add(id))
+  d.fresh = true
+  for (let i = 0; i < MAX_TRIES; i++) {
+    d.remix = (d.remix ?? 0) + 1
+    if (keep) {
+      const ch = proposeChallengers(d, exclude)
+      if (ch && matchSig(keep, ch) !== oldSig) {
+        c.match = { a: keep, b: ch, startedAt: Date.now(), streak: old.streak }
+        clearPrio(d, ch)
+        break
+      }
+    } else {
+      const m = proposeMatch(d, exclude)
+      if (m && matchSig(m.a, m.b) !== oldSig) {
+        c.match = { a: m.a, b: m.b, startedAt: Date.now(), streak: 0 }
+        clearPrio(d, [...m.a, ...m.b])
+        break
+      }
+    }
+  }
+  if (!c.match) return s // nothing different possible: leave the game as it was
+  d.fresh = false
+  return fill(d)
 }
 
 function mutate(s: Session, fn: (draft: Session) => void): Session {

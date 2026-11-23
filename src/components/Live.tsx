@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Plus, Undo2, UserPlus, Users } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Plus, Shuffle, Undo2, UserPlus, Users } from 'lucide-react'
 import type { Court, Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, gamesOf, nameOf } from '../engine/stats'
 import {
-  addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, renamePlayer, sendBack, setCourts, setLevel,
+  addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, setCourts, setLevel,
   setStatus, substitute, nameTaken, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
@@ -19,6 +19,15 @@ export default function Live({ s }: { s: Session }) {
   const [people, setPeople] = useState(false)
   const [subFor, setSubFor] = useState<{ court: string; id: string } | null>(null)
   const [waitFor, setWaitFor] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+
+  /** Run a remix; tell the host when no different match-up was possible. */
+  function remix(fn: (x: Session) => Session, what: string) {
+    const changed = fn(s) !== s
+    if (changed) updateActive(fn)
+    setNote(changed ? `${what} remixed.` : 'No different match-up is possible with the players available right now.')
+    setTimeout(() => setNote(null), 3500)
+  }
 
   const counts = countMatches(s.matches)
   const waiting = waitingUnits(s)
@@ -45,10 +54,11 @@ export default function Live({ s }: { s: Session }) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
-          <NextMatch s={s} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} />
+          {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
+          <NextMatch s={s} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onRemix={() => remix(remixNext, 'Next match')} />
           <div className="grid gap-4 sm:grid-cols-2">
             {s.courts.map((c) => (
-              <CourtCard key={c.id} s={s} c={c} now={now} onScore={() => setScoring(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} />
+              <CourtCard key={c.id} s={s} c={c} now={now} onScore={() => setScoring(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex items-center justify-center gap-3 text-sm">
@@ -125,7 +135,7 @@ export default function Live({ s }: { s: Session }) {
   )
 }
 
-function CourtCard({ s, c, now, onScore, onSub }: { s: Session; c: Court; now: number; onScore: () => void; onSub: (id: string) => void }) {
+function CourtCard({ s, c, now, onScore, onSub, onRemix }: { s: Session; c: Court; now: number; onScore: () => void; onSub: (id: string) => void; onRemix: () => void }) {
   const m = c.match
   const winners = s.config.mode === 'winners'
   return (
@@ -146,7 +156,12 @@ function CourtCard({ s, c, now, onScore, onSub }: { s: Session; c: Court; now: n
             <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> VS <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
           </div>
           <Side s={s} ids={m.b} onSub={(id) => onSub(id)} />
-          <button className="btn-primary mt-3 w-full !min-h-12 text-base" onClick={onScore}>Game finished</button>
+          <div className="mt-3 flex gap-2">
+            <button className="btn-primary flex-1 !min-h-12 text-base" onClick={onScore}>Game finished</button>
+            <button className="btn-soft !min-h-12 !px-4" onClick={onRemix} title="Remix this game: new partners and opponents" aria-label={`Remix ${c.name}`}>
+              <Shuffle size={18} /> <span className="hidden min-[380px]:inline">Remix</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="p-6 text-center text-sm text-slate-500 dark:text-slate-400">
@@ -353,13 +368,14 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
   )
 }
 
-function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick }: {
+function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick, onRemix }: {
   s: Session
   upcoming: ReturnType<typeof previewQueue>
   freeCourts: number
   waiting: number
   need: number
   onPick: (id: string) => void
+  onRemix: () => void
 }) {
   const next = upcoming[0]
   const winners = s.config.mode === 'winners'
@@ -368,7 +384,14 @@ function NextMatch({ s, upcoming, freeCourts, waiting, need, onPick }: {
     <section className="card border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-extrabold tracking-wide text-green-700 uppercase dark:text-green-400">Next match</h2>
-        <span className="text-xs text-slate-500">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
+        <div className="flex items-center gap-2">
+          <span className="hidden text-xs text-slate-500 sm:inline">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
+          {next && (
+            <button className="btn-soft !min-h-9 !px-3" onClick={onRemix} title="Re-draw the upcoming matches with different partners and opponents">
+              <Shuffle size={16} /> Remix
+            </button>
+          )}
+        </div>
       </div>
       {next ? (
         <div className="grid items-center gap-2 sm:grid-cols-[1fr_auto_1fr]">

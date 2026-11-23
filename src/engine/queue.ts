@@ -72,7 +72,7 @@ export function availableUnits(s: Session, exclude: Set<string>, counts: Counts)
 
 /** Queue order: winners-stay is first-come-first-served; the rest favour fewest games, then longest wait. */
 export function sortUnits(s: Session, units: Unit[], mode: Mode): Unit[] {
-  const salt = String(Math.floor(s.seq))
+  const salt = `${Math.floor(s.seq)}:${s.remix ?? 0}`
   const tie = (x: Unit, y: Unit) => hash(x.key + salt) - hash(y.key + salt)
   return [...units].sort(
     (x, y) =>
@@ -126,7 +126,8 @@ function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
     cost += w.skill * Math.abs(la - lb)
   }
   // Tiny deterministic jitter so equal options do not always pick the sign-up order.
-  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq)) * 0.4
+  // After a host remix the jitter is strong enough to break out of the "best" (repeating) split.
+  cost += hash(aIds.join() + '/' + bIds.join() + ':' + Math.floor(s.seq) + ':' + (s.remix ?? 0)) * (s.fresh ? 5 : 0.4)
   return cost
 }
 
@@ -162,8 +163,9 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
     // Everyone with fewer games than the cut-off is guaranteed a spot; the rest is chosen among ties.
     const cutoff = normal[r - 1].games
     const must = normal.filter((u) => u.games < cutoff)
-    const tied = normal.filter((u) => u.games === cutoff).slice(0, 8)
-    rankOf = (u) => tied.indexOf(u)
+    // A remix also considers players one game ahead, so the line-up can really change.
+    const tied = normal.filter((u) => (s.fresh ? u.games <= cutoff + 1 : u.games === cutoff)).filter((u) => u.games >= cutoff).slice(0, 9)
+    rankOf = (u) => (s.fresh ? 0 : tied.indexOf(u))
     candidates = combos(tied, r - must.length).map((c) => [...front, ...must, ...c])
   }
 
@@ -189,10 +191,15 @@ export function proposeChallengers(s: Session, exclude: Set<string>, counts = co
   let best = pool[0]
   let bestN = Infinity
   for (const u of pool) {
-    const n = counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0
+    const n = (counts.partner.get(pairKey(first.ids[0], u.ids[0])) ?? 0) + (s.fresh ? hash(u.key + ':' + (s.remix ?? 0)) * 3 : 0)
     if (n < bestN) { bestN = n; best = u }
   }
   return [first.ids[0], best.ids[0]]
+}
+
+/** Order-independent fingerprint of a match-up, used to tell whether a remix actually changed anything. */
+export function matchSig(a: string[], b: string[] | null): string {
+  return [a, b ?? []].map((x) => [...x].sort().join('+')).sort().join('/')
 }
 
 export interface Preview {
