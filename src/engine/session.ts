@@ -1,7 +1,7 @@
 import {
   DEFAULT_CONFIG, type Config, type Court, type CourtTag, type Live, type Match, type Player, type Session, type Team,
 } from './types'
-import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, unitsNeeded, waitingUnits } from './queue'
+import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, splitWinners, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
 
 /** Games a player can miss on a break before the fairness catch-up starts. */
@@ -115,11 +115,20 @@ export function fill(input: Session): Session {
     if (court.match) continue
     const exclude = busyIds(s)
     if (court.hold) {
-      const ch = proposeChallengers(s, exclude, counts)
-      if (!ch) continue
-      court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak, gid: s.nextId++ }
+      if (s.config.winnersSplit && s.config.format === 'doubles') {
+        // Winners stay & split: the winners separate and each partners one incoming player.
+        const teams = splitWinners(s, court.hold.ids, exclude, counts)
+        if (!teams) continue
+        const carry = court.hold.streaks ?? Object.fromEntries(court.hold.ids.map((id) => [id, court.hold!.streak]))
+        court.match = { a: teams.a, b: teams.b, startedAt: Date.now(), streak: court.hold.streak, gid: s.nextId++, streaks: carry }
+        clearPrio(s, [...teams.a, ...teams.b])
+      } else {
+        const ch = proposeChallengers(s, exclude, counts)
+        if (!ch) continue
+        court.match = { a: court.hold.ids, b: ch, startedAt: Date.now(), streak: court.hold.streak, gid: s.nextId++ }
+        clearPrio(s, ch)
+      }
       court.hold = null
-      clearPrio(s, ch)
       started = true
     } else {
       const m = proposeMatch(s, exclude, counts)
@@ -291,7 +300,13 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
       p.status = status
       if (status === 'active') {
         p.intervals.push([d.seq, null])
-        // A returning player keeps the place in line they had earned (lastPlayed and games are left alone).
+        // Host choice: "back" makes a returning player wait behind everyone already in line. It is a one-time skip
+        // (it lapses after the next match is drawn), so nobody can be buried for the rest of the night.
+        if (d.config.breakReturn === 'back') {
+          p.prio = 'back'
+          p.prioAt = d.nextId++
+        }
+        // By default a returning player keeps the place in line they had earned (lastPlayed and games are left alone).
         // Only a long absence gets a catch-up, so they cannot come back and take every court.
         if (d.config.lateJoinMedian) {
           const counts = countMatches(d.matches)
@@ -415,9 +430,22 @@ export function finishMatch(s: Session, courtId: string, r: Result): Session {
     c.match = null
     for (const p of d.players) if ([...live.a, ...live.b].includes(p.id)) p.lastPlayed = d.seq
     if (isKing(d, c) && r.winner) {
-      const streak = (r.winner === 'a' ? live.streak : 0) + 1
-      rec.streak = streak
-      if (streak < d.config.maxStreak) c.hold = { ids: r.winner === 'a' ? live.a : live.b, streak }
+      const winners = r.winner === 'a' ? live.a : live.b
+      if (d.config.winnersSplit && d.config.format === 'doubles') {
+        // Each player keeps their own count: someone already on a run extends it, newcomers start at 1.
+        const before = live.streaks ?? (live.streak > 0 && r.winner === 'a' ? Object.fromEntries(live.a.map((id) => [id, live.streak])) : {})
+        const next: Record<string, number> = {}
+        for (const id of winners) next[id] = (before[id] ?? 0) + 1
+        const best = Math.max(...winners.map((id) => next[id]))
+        rec.streak = best
+        // The pair stays on court only while at least one of them is still under the cap; anyone at the cap leaves.
+        const staying = winners.filter((id) => next[id] < d.config.maxStreak)
+        if (staying.length === winners.length) c.hold = { ids: winners, streak: best, streaks: next }
+      } else {
+        const streak = (r.winner === 'a' ? live.streak : 0) + 1
+        rec.streak = streak
+        if (streak < d.config.maxStreak) c.hold = { ids: winners, streak }
+      }
     }
   })
 }

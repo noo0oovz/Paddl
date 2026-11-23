@@ -20,6 +20,8 @@ export interface Config {
   maxStreak: number // winners stay: max consecutive wins on a court
   lateJoinMedian: boolean // late joiners / returners start at the median games played
   challengerCourt?: boolean // at session start, make Court 1 a challenger court
+  winnersSplit?: boolean // winners stay: the winning pair splits and each partners a challenger (doubles only)
+  breakReturn?: 'keep' | 'back' // coming back from a break: keep earned place in line, or rejoin at the back
 }
 
 export interface Player {
@@ -46,11 +48,15 @@ export interface Live {
   startedAt: number
   streak: number // wins already banked by side `a` (the holders). 0 = fresh match
   gid?: number // unique game number (never repeats), so a tap can be tied to the exact game on screen
+  /** Winners stay & split only: consecutive wins each incoming winner is carrying, keyed by player id. */
+  streaks?: Record<string, number>
 }
 
 export interface Hold {
   ids: string[]
   streak: number
+  /** Winners stay & split: the streak each winner carries (a pair that split keeps separate counts). */
+  streaks?: Record<string, number>
 }
 
 export interface Court {

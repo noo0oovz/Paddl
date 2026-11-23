@@ -137,6 +137,17 @@ function splitCost(s: Session, counts: Counts, A: Unit[], B: Unit[]): number {
   return cost
 }
 
+/**
+ * Skill mode only: how far apart the strongest and weakest player in this group are. Added to the cost of a group so
+ * that, among players who are equally owed a game, similar levels end up together. It never excludes anyone (fairness
+ * on games played is decided first), so a game can always be formed and nobody sits idle waiting for a perfect match.
+ */
+function spreadPenalty(s: Session, set: Unit[]): number {
+  if (s.config.mode !== 'skill' || set.length < 2) return 0
+  const per = set.map((u) => u.level / u.ids.length) // a fixed team's level is the average of the pair
+  return (Math.max(...per) - Math.min(...per)) * 12
+}
+
 function splitsOf<T>(set: T[], format: Format): [T[], T[]][] {
   if (format === 'doubles') {
     return [
@@ -177,7 +188,7 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
 
   let best: { cost: number; a: Unit[]; b: Unit[] } | null = null
   for (const set of candidates) {
-    const rank = set.reduce((n, u) => n + Math.max(0, rankOf(u)), 0)
+    const rank = set.reduce((n, u) => n + Math.max(0, rankOf(u)), 0) + spreadPenalty(s, set)
     for (const [A, B] of splitsOf(set, s.config.format)) {
       const cost = rank + splitCost(s, counts, A, B)
       if (!best || cost < best.cost) best = { cost, a: A, b: B }
@@ -201,6 +212,23 @@ export function proposeChallengers(s: Session, exclude: Set<string>, counts = co
     if (n < bestN) { bestN = n; best = u }
   }
   return [first.ids[0], best.ids[0]]
+}
+
+/**
+ * Winners stay & split: the two winners go to opposite sides, and each is paired with one incoming player.
+ * Returns the new teams, or null when fewer than two people are waiting. The challengers are the two who have waited
+ * longest; between the two possible pairings the one with fewer repeated partnerships wins.
+ */
+export function splitWinners(s: Session, winners: string[], exclude: Set<string>, counts = countMatches(s.matches)): { a: string[]; b: string[] } | null {
+  if (s.config.format !== 'doubles' || winners.length !== 2) return null
+  const units = sortUnits(s, availableUnits(s, exclude, counts), 'winners')
+  if (units.length < 2) return null
+  const [c1, c2] = [units[0].ids[0], units[1].ids[0]]
+  const [w1, w2] = winners
+  const cost = (p: string, q: string) => counts.partner.get(pairKey(p, q)) ?? 0
+  const straight = cost(w1, c1) + cost(w2, c2)
+  const crossed = cost(w1, c2) + cost(w2, c1)
+  return crossed < straight ? { a: [w1, c2], b: [w2, c1] } : { a: [w1, c1], b: [w2, c2] }
 }
 
 /** Order-independent fingerprint of a match-up, used to tell whether a remix actually changed anything. */

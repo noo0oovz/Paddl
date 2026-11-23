@@ -125,7 +125,11 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                   <Stepper label="wins in a row" value={cfg.maxStreak} min={1} max={10} onChange={(n) => set({ maxStreak: n })} />
                 </div>
               )}
+              {(cfg.mode === 'winners' || cfg.challengerCourt) && cfg.format === 'doubles' && (
+                <Toggle checked={!!cfg.winnersSplit} onChange={(b) => set({ winnersSplit: b })} label="Split the winners" hint="Winners go to opposite sides and each partners a newcomer. Off keeps the winning pair together" />
+              )}
               <Toggle checked={cfg.lateJoinMedian} onChange={(b) => set({ lateJoinMedian: b })} label="Fair late joins" hint="Late arrivals start at the average games played so they do not hog courts" />
+              <Toggle checked={cfg.breakReturn === 'back'} onChange={(b) => set({ breakReturn: b ? 'back' : 'keep' })} label="Back of the line after a break" hint="Off: someone returning from a break keeps the place they had earned" />
             </div>
           )}
         </section>

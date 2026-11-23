@@ -35,16 +35,19 @@ describe('awards', () => {
   })
 
   it('Iron Player ties on games are broken by minutes on court, and a true tie names everyone', () => {
-    const s = createSession('t', { courts: 1 }, names(5))
-    const [a, b, c, d, e] = ids(s)
-    // P1 and P2 both play 2 games, but P1's games were longer.
-    s.matches = [game(s, 0, [a, c], [d, e], 11, 5, 900_000), game(s, 1, [a, b], [d, e], 11, 5, 900_000), game(s, 2, [b, c], [d, e], 11, 5, 300_000)]
-    expect(awards(s).find((x) => x.id === 'iron')!.winner).toBe('P4 & P5')
-    const tie = createSession('t', { courts: 1 }, names(4))
+    const s = createSession('t', { courts: 1 }, names(10))
+    const [a, b, c, d, e, f] = ids(s)
+    // P1 and P2 play 2 games, but P1's games were longer: P1 alone takes it.
+    s.matches = [game(s, 0, [a, c], [d, e], 11, 5, 900_000), game(s, 1, [a, b], [d, e], 11, 5, 900_000), game(s, 2, [b, c], [f, e], 11, 5, 300_000)]
+    expect(awards(s).find((x) => x.id === 'iron')!.winner).toBe('P5') // P5 is in all three games, P4 in two
+    // A true tie: four players play exactly the same two games for the same time (4 of 10 is under half the field).
+    const tie = createSession('t', { courts: 1 }, names(10))
     const [w, x, y, z] = ids(tie)
-    tie.matches = [game(tie, 0, [w, x], [y, z], 11, 5, 600_000)]
-    tie.matches.push(game(tie, 1, [w, x], [y, z], 11, 5, 600_000))
-    expect(awards(tie).find((q) => q.id === 'iron')!.winner).toBe('P1, P2 +2')
+    tie.matches = [game(tie, 0, [w, x], [y, z], 11, 5, 600_000), game(tie, 1, [w, x], [y, z], 11, 5, 600_000)]
+    const iron = awards(tie).find((q) => q.id === 'iron')!
+    expect(iron.winner).toBe('P1, P2, P3 & P4') // every name, nothing hidden behind "+2"
+    expect(iron.tied).toBe(4)
+    expect(iron.detail).toMatch(/^4-way tie · 2 games/)
   })
 
   it('Clutch Closer counts only wins by 2 or less and ignores games without scores', () => {
@@ -105,7 +108,9 @@ describe('awards', () => {
       game(s, 2, [a, b], [c, d], 11, 5),
     ]
     const out = awards(s)
-    expect(out.find((x) => x.id === 'streak')!.detail).toBe('3 wins in a row')
+    const fire = out.find((x) => x.id === 'streak')!
+    expect(fire.detail).toMatch(/3 wins in a row$/)
+    expect(fire.winner).toBe('P1 & P2') // both partners won all three, so it is a 2-way tie
     expect(out.find((x) => x.id === 'duo')!.detail).toBe('3–0 as partners')
   })
 
@@ -306,11 +311,22 @@ describe('ETA is never over-optimistic', () => {
 })
 
 describe('Clutch Closer needs a real standout', () => {
-  it('is skipped when many players tie on a single close win', () => {
+  it('names everyone who shares a close-win lead, with the size of the tie', () => {
     const s = createSession('t', { courts: 1 }, names(8))
     const [a, b, c, d, e, f, g, h] = ids(s)
-    // two close games, each won by a different team: 4 + 4 winners, each with exactly one close win.
+    // two close games, each won by a different pair: 4 of 8 players have exactly one close win (half the field)
     s.matches = [game(s, 0, [a, b], [c, d], 11, 9), game(s, 1, [e, f], [g, h], 11, 9)]
+    const clutch = awards(s).find((x) => x.id === 'clutch')!
+    expect(clutch.winner).toBe('P1, P2, P5 & P6')
+    expect(clutch.tied).toBe(4)
+    expect(clutch.detail).toMatch(/^4-way tie · 1 win by 2 points or less/)
+  })
+
+  it('skips an award that more than half of the players share (it says nothing)', () => {
+    const s = createSession('t', { courts: 1 }, names(8))
+    const [a, b, c, d, e, f, g, h] = ids(s)
+    // three close games won by different groups: 6 of 8 players share one close win
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 9), game(s, 1, [e, f], [g, h], 11, 9), game(s, 2, [c, d], [a, b], 11, 9)]
     expect(awards(s).find((x) => x.id === 'clutch')).toBeUndefined()
   })
 
@@ -327,5 +343,71 @@ describe('Clutch Closer needs a real standout', () => {
     const [a, b, c, d] = ids(s)
     s.matches = [game(s, 0, [a, b], [c, d], 11, 9), game(s, 1, [a, b], [c, d], 12, 10)]
     expect(awards(s).find((x) => x.id === 'clutch')!.detail).toContain('2 wins')
+  })
+})
+
+
+describe('award ties are shown in full', () => {
+  it('a single winner has no tie wording', () => {
+    const s = createSession('t', { courts: 1 }, names(6))
+    const [a, b, c, d, e, f] = ids(s)
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 5, 600_000), game(s, 1, [a, e], [f, b], 11, 5, 900_000), game(s, 2, [a, c], [e, f], 11, 5, 600_000)]
+    const iron = awards(s).find((x) => x.id === 'iron')!
+    expect(iron.winner).toBe('P1')
+    expect(iron.tied).toBeUndefined()
+    expect(iron.detail).not.toMatch(/tie/)
+  })
+
+  it('two names read "A & B"; three or more read "A, B & C"', () => {
+    const s = createSession('t', { courts: 1 }, names(8))
+    const [a, b, c, d] = ids(s)
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 5), game(s, 1, [a, b], [c, d], 11, 5)]
+    const two = awards(s).find((x) => x.id === 'streak')
+    const iron = awards(s).find((x) => x.id === 'iron')!
+    expect(iron.winner).toBe('P1, P2, P3 & P4')
+    expect(iron.winner).not.toMatch(/[+][0-9]/)
+    expect(two).toBeUndefined() // only 2 wins in a row: below the On Fire bar
+  })
+
+  it('no award ever hides names behind a "+N"', () => {
+    for (let n = 4; n <= 14; n++) {
+      let s = createSession('t', { courts: 2 }, names(n))
+      for (let i = 0; i < 12; i++) {
+        const c = s.courts.find((x) => x.match)
+        if (!c) break
+        s = finishMatch(s, c.id, { winner: i % 2 ? 'a' : 'b', scoreA: 11, scoreB: 9 })
+      }
+      for (const a of awards(s)) expect(a.winner, `${n} players, ${a.title}`).not.toMatch(/[+][0-9]/)
+    }
+  })
+
+  it('the tie count always matches the number of names listed', () => {
+    for (let n = 4; n <= 12; n++) {
+      let s = createSession('t', { courts: 2 }, names(n))
+      for (let i = 0; i < 10; i++) {
+        const c = s.courts.find((x) => x.match)
+        if (!c) break
+        s = finishMatch(s, c.id, { winner: i % 2 ? 'a' : 'b', scoreA: 11, scoreB: 9 })
+      }
+      for (const a of awards(s)) {
+        if (a.tied === undefined) continue
+        const listed = a.winner.split(/, | & /).length
+        // duos and marathon list pairs, which are not ties; only the player awards are checked
+        if (['iron', 'clutch', 'social', 'streak'].includes(a.id)) expect(listed, `${a.title} with ${n} players`).toBe(a.tied)
+      }
+    }
+  })
+
+  it('Fixed teams: tied teams are listed whole, as "Josh & Daria"', () => {
+    const pairs: [{ name: string }, { name: string }][] = [['Josh', 'Daria'], ['Stee', 'Kp'], ['Ann', 'Bo'], ['Cy', 'Di'], ['Ed', 'Flo'], ['Gil', 'Hal'], ['Ivo', 'Jax']].map(([x, y]) => [{ name: x }, { name: y }])
+    const s = createSession('t', { format: 'teams', courts: 1 }, [], pairs)
+    const tid = (n: string) => s.teams.find((x) => x.name.startsWith(n))!.playerIds as string[]
+    const g = (i: number, a: string, b: string) => ({ id: 'g' + i, seq: i + 1, court: 'Court 1', a: tid(a), b: tid(b), scoreA: 11, scoreB: 5, winner: 'a' as const, at: i, ms: 600000 })
+    // Josh, Stee and Ann each play two games (a 3-way tie); everyone else plays one.
+    s.matches = [g(0, 'Josh', 'Cy'), g(1, 'Stee', 'Ed'), g(2, 'Ann', 'Gil'), g(3, 'Josh', 'Ivo'), g(4, 'Stee', 'Ann')]
+    const iron = awards(s).find((x) => x.id === 'iron')!
+    expect(iron.tied).toBe(3)
+    for (const n of ['Josh & Daria', 'Stee & Kp', 'Ann & Bo']) expect(iron.winner).toContain(n)
+    expect(iron.detail).toMatch(/^3-way tie/)
   })
 })

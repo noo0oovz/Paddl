@@ -126,6 +126,10 @@ describe('stress: random hosts doing random (and abusive) things', () => {
   const configs: Partial<Config>[] = [
     { mode: 'fair' }, { mode: 'winners', maxStreak: 2 }, { mode: 'skill' }, { mode: 'robin' }, { mode: 'mystery' },
     { format: 'singles' }, { format: 'teams' }, { mode: 'fair', challengerCourt: true, courts: 3 },
+    { mode: 'winners', winnersSplit: true, maxStreak: 2 },
+    { mode: 'fair', challengerCourt: true, winnersSplit: true, courts: 3 },
+    { mode: 'fair', breakReturn: 'back' },
+    { mode: 'skill', breakReturn: 'back' },
   ]
   configs.forEach((cfg, ci) => {
     it(`config ${ci} (${cfg.format ?? 'doubles'}/${cfg.mode ?? 'fair'}): 60 sessions x 120 actions never break an invariant`, () => {

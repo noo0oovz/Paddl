@@ -48,11 +48,11 @@ fs.writeFileSync('public/favicon.svg', tile(true, 3))
 
 const browser = await puppeteer.launch({ executablePath: CHROME, headless: true })
 const page = await browser.newPage()
-for (const size of [192, 512]) {
+for (const [size, name, pad] of [[192, 'icon-192.png', 9], [512, 'icon-512.png', 9], [180, 'apple-touch-icon.png', 8], [512, 'icon-maskable-512.png', 16]]) {
   await page.setViewport({ width: size, height: size, deviceScaleFactor: 1 })
   // pad 9 keeps the art inside the maskable safe zone (the middle 80%)
-  await page.setContent(`<body style="margin:0">${tile(false, 9).replace('<svg ', `<svg width="${size}" height="${size}" `)}</body>`)
-  await page.screenshot({ path: path.join('public', `icon-${size}.png`), omitBackground: false })
+  await page.setContent(`<body style="margin:0">${tile(false, pad).replace('<svg ', `<svg width="${size}" height="${size}" `)}</body>`)
+  await page.screenshot({ path: path.join('public', name), omitBackground: false })
 }
 await browser.close()
 console.log('favicon and icons written')

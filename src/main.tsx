@@ -4,8 +4,10 @@ import './index.css'
 import App from './App'
 import { applyTheme } from './lib/theme'
 import { watchForUpdates } from './lib/update'
+import { watchInstall } from './lib/install'
 
 applyTheme()
+watchInstall()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

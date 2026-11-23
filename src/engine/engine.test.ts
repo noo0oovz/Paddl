@@ -877,3 +877,184 @@ describe('a stale tap cannot score the wrong game', () => {
     expect(finishMatch(s, 'nope', { winner: 'a', scoreA: null, scoreB: null })).toBe(s)
   })
 })
+
+describe('winners stay & split', () => {
+  const cfg = { mode: 'winners' as const, courts: 1, maxStreak: 3, winnersSplit: true }
+  const win = (s: Session, side: 'a' | 'b') => finishMatch(s, s.courts[0].id, { winner: side, scoreA: null, scoreB: null })
+
+  it('the winners separate and each partners a newcomer', () => {
+    let s = createSession('t', cfg, names(10))
+    const m = s.courts[0].match!
+    const winners = [...m.a]
+    s = win(s, 'a')
+    const next = s.courts[0].match!
+    expect(next.a.includes(winners[0]) && next.a.includes(winners[1])).toBe(false) // not together
+    expect(next.b.includes(winners[0]) && next.b.includes(winners[1])).toBe(false)
+    expect([...next.a, ...next.b]).toEqual(expect.arrayContaining(winners)) // both still on court
+    const onA = winners.filter((w) => next.a.includes(w)).length
+    expect(onA).toBe(1) // exactly one winner per side
+    const newcomers = [...next.a, ...next.b].filter((id) => !winners.includes(id))
+    expect(newcomers).toHaveLength(2)
+    expect(newcomers.some((id) => m.b.includes(id))).toBe(false) // the losers went to the back
+  })
+
+  it('"together" is still the default when split is off', () => {
+    let s = createSession('t', { ...cfg, winnersSplit: false }, names(10))
+    const winners = [...s.courts[0].match!.a]
+    s = win(s, 'a')
+    const next = s.courts[0].match!
+    expect(next.a).toEqual(winners)
+  })
+
+  it('never splits singles or fixed teams (there is no partner to split)', () => {
+    let one = createSession('t', { ...cfg, format: 'singles' }, names(6))
+    const w = one.courts[0].match!.a[0]
+    one = win(one, 'a')
+    expect(one.courts[0].match!.a).toEqual([w])
+    const pairs: [{ name: string }, { name: string }][] = [0, 1, 2, 3].map((i) => [{ name: `A${i}` }, { name: `B${i}` }])
+    let teams = createSession('t', { ...cfg, format: 'teams' }, [], pairs)
+    const wt = [...teams.courts[0].match!.a]
+    teams = win(teams, 'a')
+    expect(teams.courts[0].match!.a).toEqual(wt)
+  })
+
+  it('the streak cap sends the winners off after the configured number of wins', () => {
+    let s = createSession('t', { ...cfg, maxStreak: 2 }, names(12))
+    const [w1, w2] = [...s.courts[0].match!.a]
+    s = win(s, 'a') // 1st win for w1 and w2
+    // after the split they are on opposite sides; whichever side wins carries one of them (2nd win)
+    const sideOf = (id: string) => (s.courts[0].match!.a.includes(id) ? 'a' : 'b')
+    expect(sideOf(w1)).not.toBe(sideOf(w2))
+    s = win(s, sideOf(w1))
+    const after = [...s.courts[0].match!.a, ...s.courts[0].match!.b]
+    expect(s.matches).toHaveLength(2)
+    // w1 won a 2nd time (cap reached) and left the court, so they must not be playing a 3rd game in a row
+    expect(after.includes(w1)).toBe(false)
+  })
+
+  it('a winner who loses loses their streak, a winner who wins keeps counting', () => {
+    let s = createSession('t', { ...cfg, maxStreak: 5 }, names(12))
+    const [w1, w2] = [...s.courts[0].match!.a]
+    s = win(s, 'a')
+    const sideOf = (id: string) => (s.courts[0].match!.a.includes(id) ? 'a' : 'b')
+    const winnerSide = sideOf(w1)
+    s = win(s, winnerSide)
+    expect(s.matches[1].streak).toBe(2) // w1 extends to 2
+    expect(typeof w2).toBe('string')
+  })
+
+  it('games stay fair, nobody is starved by the split', () => {
+    let s = createSession('t', { ...cfg, maxStreak: 2, courts: 2 }, names(11))
+    for (let i = 0; i < 70; i++) {
+      const live = s.courts.filter((c) => c.match)
+      if (!live.length) break
+      const c = live[i % live.length]
+      s = finishMatch(s, c.id, { winner: i % 3 ? 'a' : 'b', scoreA: null, scoreB: null })
+    }
+    const g = playerStandings(s).map((p) => p.played)
+    expect(Math.max(...g) - Math.min(...g)).toBeLessThanOrEqual(5)
+  })
+
+  it('a split works even with only five players, because the losers rejoin the line', () => {
+    let s = createSession('t', { ...cfg }, names(5)) // 4 on court, 1 waiting
+    const winners = [...s.courts[0].match!.a]
+    s = win(s, 'a')
+    const next = s.courts[0].match!
+    expect(next).not.toBeNull()
+    const all = [...next.a, ...next.b]
+    expect(new Set(all).size).toBe(4) // four different people, nobody twice
+    expect(winners.every((w) => all.includes(w))).toBe(true) // both winners are still on court
+    expect(winners.filter((w) => next.a.includes(w))).toHaveLength(1) // one on each side
+  })
+})
+
+describe('break return rule', () => {
+  it('"keep" (the default): a returning player is back at their earned place', () => {
+    let s = createSession('t', { courts: 1 }, names(10))
+    const onCourt = new Set([...s.courts[0].match!.a, ...s.courts[0].match!.b])
+    const id = s.players.find((p) => !onCourt.has(p.id))!.id
+    s = setStatus(s, id, 'resting')
+    s = setStatus(s, id, 'active')
+    const first = previewQueue(s, 1)[0]
+    expect([...first.a, ...first.b!]).toContain(id) // they had waited longest, so they are up next
+  })
+
+  it('"back": a returning player rejoins behind everyone already waiting', () => {
+    let s = createSession('t', { courts: 1, breakReturn: 'back' }, names(10))
+    const onCourt = new Set([...s.courts[0].match!.a, ...s.courts[0].match!.b])
+    const id = s.players.find((p) => !onCourt.has(p.id))!.id
+    s = setStatus(s, id, 'resting')
+    s = setStatus(s, id, 'active')
+    const first = previewQueue(s, 1)[0]
+    expect([...first.a, ...first.b!]).not.toContain(id)
+  })
+
+  it('"back" is only a one-time skip: the player still gets games afterwards', () => {
+    let s = createSession('t', { courts: 1, breakReturn: 'back' }, names(10))
+    const onCourt = new Set([...s.courts[0].match!.a, ...s.courts[0].match!.b])
+    const id = s.players.find((p) => !onCourt.has(p.id))!.id
+    s = setStatus(s, id, 'resting')
+    s = setStatus(s, id, 'active')
+    s = simulate(s, 16)
+    expect(playerStandings(s).find((p) => p.id === id)!.played).toBeGreaterThan(0)
+    expect(spread(s)).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('matching quality guarantees', () => {
+  it('singles spread head-to-head meetings evenly (5 players meet each other equally)', () => {
+    let s = createSession('t', { courts: 1, format: 'singles' }, names(5))
+    s = simulate(s, 30)
+    const { opp } = countMatches(s.matches)
+    const v = [...opp.values()]
+    expect(Math.max(...v) - Math.min(...v)).toBeLessThanOrEqual(1)
+    expect(v).toHaveLength(10)
+  })
+
+  it('mystery mix never repeats the exact previous match-up when other line-ups exist', () => {
+    for (const n of [5, 6, 8, 10]) {
+      let s = createSession('t', { courts: 1, mode: 'mystery' }, names(n))
+      let prev = ''
+      for (let i = 0; i < 30; i++) {
+        const m = s.courts[0].match!
+        const sig = [[...m.a].sort().join('+'), [...m.b].sort().join('+')].sort().join('/')
+        expect(sig, `${n} players, game ${i + 1}`).not.toBe(prev)
+        prev = sig
+        s = finishMatch(s, s.courts[0].id, { winner: i % 2 ? 'a' : 'b', scoreA: null, scoreB: null })
+      }
+    }
+  })
+
+  it('skill mode groups similar levels together more than plain rotation does', () => {
+    const levels = [2, 2, 2.5, 2.5, 3, 3, 3.5, 3.5, 4.5, 4.5, 5, 5.5]
+    const avgGap = (mode: 'fair' | 'skill') => {
+      let s = createSession('t', { courts: 2, mode }, levels.map((level, i) => ({ name: `P${i + 1}`, level })))
+      const gaps: number[] = []
+      for (let i = 0; i < 60; i++) {
+        const live = s.courts.filter((c) => c.match)
+        const c = live[i % live.length]
+        const lv = [...c.match!.a, ...c.match!.b].map((id) => s.players.find((p) => p.id === id)!.level)
+        gaps.push(Math.max(...lv) - Math.min(...lv))
+        s = finishMatch(s, c.id, { winner: i % 2 ? 'a' : 'b', scoreA: null, scoreB: null })
+      }
+      return gaps.reduce((a, b) => a + b, 0) / gaps.length
+    }
+    expect(avgGap('skill')).toBeLessThan(avgGap('fair') - 0.4)
+  })
+
+  it('strongest + weakest vs the middle two is always the closest team split', () => {
+    const vals = [2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5]
+    for (const a of vals) for (const b of vals) for (const c of vals) for (const d of vals) {
+      const r = [a, b, c, d].sort((x, y) => x - y)
+      const gap = (i: number[]) => Math.abs(r[i[0]] + r[i[1]] - r[i[2]] - r[i[3]])
+      expect(gap([0, 3, 1, 2])).toBeLessThanOrEqual(Math.min(gap([0, 1, 2, 3]), gap([0, 2, 1, 3])) + 1e-9)
+    }
+  })
+
+  it('skill teams are balanced in a real game', () => {
+    const s = createSession('t', { mode: 'skill', courts: 1 }, [5, 5, 2, 2].map((level, i) => ({ name: `S${i}`, level })))
+    const m = s.courts[0].match!
+    const sum = (ids: string[]) => ids.reduce((n, id) => n + s.players.find((p) => p.id === id)!.level, 0)
+    expect(sum(m.a)).toBe(sum(m.b))
+  })
+})

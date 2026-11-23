@@ -140,8 +140,9 @@ export interface Award {
   id: string
   emoji: string
   title: string
-  winner: string // player or duo name(s)
-  detail: string // the stat behind it, in plain words
+  winner: string // player or duo name(s); every tied name is listed
+  detail: string // the stat behind it, in plain words (starts with "3-way tie" when shared)
+  tied?: number // how many share the award (only set when more than one)
 }
 
 /** A game is "close" when the winner won by 2 or less and the score reached the target. */
@@ -168,8 +169,23 @@ function fmtMin(ms: number): string {
   return m < 60 ? `${Math.max(m, 1)} min` : `${Math.floor(m / 60)} h ${m % 60} min`
 }
 
+/** "Ana", "Ana & Ben", "Ana, Ben & Cara": every name, nothing hidden behind a "+2". */
 function listNames(names: string[]): string {
-  return names.length <= 2 ? names.join(' & ') : `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+  if (names.length <= 1) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`
+}
+
+/**
+ * Turn the people who share an award into its winner text, detail and tie count. Returns null when the tie is so
+ * wide it means nothing (more than half of everyone shares it), so the award is skipped.
+ */
+function shared(names: string[], field: number, detail: string): { winner: string; detail: string; tied?: number } | null {
+  if (names.length > 1 && names.length > field / 2 && field >= 4) return null
+  return {
+    winner: listNames(names),
+    detail: names.length > 1 ? `${names.length}-way tie · ${detail}` : detail,
+    ...(names.length > 1 ? { tied: names.length } : {}),
+  }
 }
 
 /**
@@ -194,13 +210,8 @@ export function awards(s: Session): Award[] {
     const top = rows.filter((r) => r.played === maxPlayed)
     const bestMs = Math.max(...top.map((r) => r.playMs))
     const tied = top.filter((r) => r.playMs === bestMs)
-    out.push({
-      id: 'iron',
-      emoji: '🦾',
-      title: 'Iron Player',
-      winner: listNames(tied.map((r) => r.name)),
-      detail: `${maxPlayed} games${bestMs > 0 ? ` · ${fmtMin(bestMs)} on court` : ''}`,
-    })
+    const g = shared(tied.map((r) => r.name), rows.length, `${maxPlayed} games${bestMs > 0 ? ` · ${fmtMin(bestMs)} on court` : ''}`)
+    if (g) out.push({ id: 'iron', emoji: '🦾', title: 'Iron Player', ...g })
   }
 
   // Clutch Closer: wins in close games (won by 2 or less), when scores were entered.
@@ -218,14 +229,12 @@ export function awards(s: Session): Award[] {
   if (clutch.size) {
     const best = Math.max(...clutch.values())
     const ids = [...clutch].filter(([, n]) => n === best).map(([id]) => id)
-    // Naming a big group for a single close win is noise, not an award: need a small group, or 2+ close wins.
-    if (ids.length <= 2 || best >= 2) out.push({
-      id: 'clutch',
-      emoji: '🧊',
-      title: 'Clutch Closer',
-      winner: listNames(ids.map((id) => (teams ? sideName(id.split('+')) : byId.get(id)?.name ?? '?'))),
-      detail: `${best} ${best === 1 ? 'win' : 'wins'} by 2 points or less`,
-    })
+    const g = shared(
+      ids.map((id) => (teams ? sideName(id.split('+')) : byId.get(id)?.name ?? '?')),
+      rows.length,
+      `${best} ${best === 1 ? 'win' : 'wins'} by 2 points or less`,
+    )
+    if (g) out.push({ id: 'clutch', emoji: '🧊', title: 'Clutch Closer', ...g })
   }
 
   // Social Butterfly: most different partners + opponents met. Needs at least 3 distinct people.
@@ -239,13 +248,12 @@ export function awards(s: Session): Award[] {
     const maxGames = Math.max(...tied.map((x) => x.r.played))
     const final = tied.filter((x) => x.r.played === maxGames)
     const v = final[0].v
-    out.push({
-      id: 'social',
-      emoji: '🦋',
-      title: 'Social Butterfly',
-      winner: listNames(final.map((x) => x.r.name)),
-      detail: `played with ${v.partners} partner${v.partners === 1 ? '' : 's'} and faced ${v.opponents} opponent${v.opponents === 1 ? '' : 's'}`,
-    })
+    const g = shared(
+      final.map((x) => x.r.name),
+      rows.length,
+      `played with ${v.partners} partner${v.partners === 1 ? '' : 's'} and faced ${v.opponents} opponent${v.opponents === 1 ? '' : 's'}`,
+    )
+    if (g) out.push({ id: 'social', emoji: '🦋', title: 'Social Butterfly', ...g })
   }
 
   // Marathon Match: the longest recorded game.
@@ -265,13 +273,8 @@ export function awards(s: Session): Award[] {
   const streakTop = Math.max(...rows.map((r) => r.longestStreak))
   if (streakTop >= 3) {
     const tied = rows.filter((r) => r.longestStreak === streakTop)
-    out.push({
-      id: 'streak',
-      emoji: '🔥',
-      title: 'On Fire',
-      winner: listNames(tied.map((r) => r.name)),
-      detail: `${streakTop} wins in a row`,
-    })
+    const g = shared(tied.map((r) => r.name), rows.length, `${streakTop} wins in a row`)
+    if (g) out.push({ id: 'streak', emoji: '🔥', title: 'On Fire', ...g })
   }
 
   // Dynamic Duo: best partnership (min 3 games together).

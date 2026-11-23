@@ -20,7 +20,7 @@ function Topic({ emoji, title, children, open: initial = false }: { emoji: strin
 const li = 'flex gap-2'
 
 /** How-to guide. Plain language, one topic per thing a host will wonder about. */
-export default function Help({ onClose, onTour }: { onClose: () => void; onTour?: () => void }) {
+export default function Help({ onClose, onTour, onInstall }: { onClose: () => void; onTour?: () => void; onInstall?: () => void }) {
   return (
     <Sheet title="How to use Paddl" onClose={onClose}>
       <div className="space-y-2.5">
@@ -71,6 +71,11 @@ export default function Help({ onClose, onTour }: { onClose: () => void; onTour?
 
         <Topic emoji="🏆" title="Results and sharing">
           <p>After <b>End</b>, <b>Save images</b> makes three pictures: final standings, games played with minutes, and match history. <b>Save recap card</b> makes a fun awards card for the group chat.</p>
+        </Topic>
+
+        <Topic emoji="📲" title="Add Paddl to your home screen">
+          <p>Open Paddl in one tap, full screen, like an app. It works for iPhone, iPad, Android phones and Android tablets.</p>
+          {onInstall && <button className="btn-primary mt-1 w-full" onClick={() => { onClose(); onInstall() }}>Show me how</button>}
         </Topic>
 
         <Topic emoji="📱" title="Works offline, saves automatically">

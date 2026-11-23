@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CircleDot, Flag, HardDriveDownload, HelpCircle, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
+import { CircleDot, Flag, HardDriveDownload, HelpCircle, Smartphone, History as HistoryIcon, Home as HomeIcon, Plus, Trophy } from 'lucide-react'
 import { endSession } from './engine/session'
 import { MODE_INFO, type Session } from './engine/types'
 import { damagedAtStartup, openSession, updateActive, useData } from './store'
@@ -13,6 +13,8 @@ import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
 import Help from './components/Help'
 import DataSheet from './components/DataSheet'
+import InstallGuide from './components/InstallGuide'
+import { currentEnv } from './lib/install'
 import UpdateBanner from './components/UpdateBanner'
 import { useConfirm } from './components/Confirm'
 import MoreMenu from './components/MoreMenu'
@@ -27,6 +29,7 @@ export default function App() {
   const [creating, setCreating] = useState(false)
   const [help, setHelp] = useState(false)
   const [data, setData] = useState(false)
+  const [install, setInstall] = useState(false)
   const [tour, setTour] = useState(() => !tourSeen())
   const [tab, setTab] = useState<Tab>('live')
   const active = sessions.find((s) => s.id === activeId) ?? null
@@ -36,20 +39,21 @@ export default function App() {
   let screen
   if (creating) screen = <Setup onCancel={() => setCreating(false)} />
   else if (active?.endedAt) screen = <Summary s={active} onBack={() => openSession(null)} />
-  else if (!active) screen = <Home onNew={() => setCreating(true)} onHelp={() => setHelp(true)} onData={() => setData(true)} />
-  else screen = <Shell s={active} tab={tab} setTab={setTab} onHelp={() => setHelp(true)} onData={() => setData(true)} />
+  else if (!active) screen = <Home onNew={() => setCreating(true)} onHelp={() => setHelp(true)} onData={() => setData(true)} onInstall={() => setInstall(true)} />
+  else screen = <Shell s={active} tab={tab} setTab={setTab} onHelp={() => setHelp(true)} onData={() => setData(true)} onInstall={() => setInstall(true)} />
   return (
     <>
       {screen}
-      {help && <Help onClose={() => setHelp(false)} onTour={() => setTour(true)} />}
+      {help && <Help onClose={() => setHelp(false)} onTour={() => setTour(true)} onInstall={() => setInstall(true)} />}
       {data && <DataSheet onClose={() => setData(false)} />}
+      {install && <InstallGuide onClose={() => setInstall(false)} />}
       <UpdateBanner />
       {tour && <Tour onDone={() => setTour(false)} />}
     </>
   )
 }
 
-function Shell({ s, tab, setTab, onHelp, onData }: { s: Session; tab: Tab; setTab: (t: Tab) => void; onHelp: () => void; onData: () => void }) {
+function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab: Tab; setTab: (t: Tab) => void; onHelp: () => void; onData: () => void; onInstall: () => void }) {
   const tabs: { id: Tab; label: string; icon: typeof Flag }[] = [
     { id: 'live', label: 'Courts', icon: CircleDot },
     { id: 'standings', label: 'Standings', icon: Trophy },
@@ -82,6 +86,7 @@ function Shell({ s, tab, setTab, onHelp, onData }: { s: Session; tab: Tab; setTa
         ))}
         <div className="mt-auto space-y-1">
           <button className="btn-ghost w-full justify-start" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+          <button className="btn-ghost w-full justify-start" onClick={onInstall}><Smartphone size={18} /> Add to home screen</button>
           <button className="btn-ghost w-full justify-start" onClick={onData}><HardDriveDownload size={18} /> Backup and restore</button>
           <UndoButton full />
           <SaveStatus className="block px-1 pb-1" />
@@ -99,7 +104,7 @@ function Shell({ s, tab, setTab, onHelp, onData }: { s: Session; tab: Tab; setTa
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             <UndoButton />
-            <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} onData={onData} />
+            <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} onData={onData} onInstall={onInstall} />
             <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
           </div>
         </header>
@@ -122,7 +127,10 @@ function Shell({ s, tab, setTab, onHelp, onData }: { s: Session; tab: Tab; setTa
   )
 }
 
-function Home({ onNew, onHelp, onData }: { onNew: () => void; onHelp: () => void; onData: () => void }) {
+function Home({ onNew, onHelp, onData, onInstall }: { onNew: () => void; onHelp: () => void; onData: () => void; onInstall: () => void }) {
+  // Offer the install card on phones and tablets that have not installed Paddl yet.
+  const env = currentEnv()
+  const showInstall = env.platform !== 'desktop' && !env.installed
   const { sessions } = useData()
   const live = sessions.filter((s) => !s.endedAt)
   const past = sessions.filter((s) => s.endedAt)
@@ -162,6 +170,16 @@ function Home({ onNew, onHelp, onData }: { onNew: () => void; onHelp: () => void
           <h2 className="label">🏆 Past sessions</h2>
           <div className="space-y-2">{past.map((s) => <Row key={s.id} s={s} />)}</div>
         </section>
+      )}
+      {showInstall && (
+        <button className="card mt-6 flex w-full items-center gap-3 border-accent/30 p-4 text-left transition hover:border-accent/60" onClick={onInstall}>
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent/15 text-brand"><Smartphone size={22} /></span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-black">Add Paddl to your home screen</span>
+            <span className="block text-sm text-slate-500 dark:text-slate-400">One tap to open, full screen, works offline.</span>
+          </span>
+          <span className="rounded-full bg-accent px-3 py-1 text-xs font-black text-accent-ink">Show me how</span>
+        </button>
       )}
       {sessions.length === 0 && (
         <section className="mt-8">
