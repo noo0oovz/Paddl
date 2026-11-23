@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, reopenSession, swapOutOfNext, sendBack, setCourts, setStatus, substitute,
+  addPlayer, cancelMatch, createSession, deleteMatch, editMatch, endSession, finishMatch, playNext, pullOut, remixCourt, remixNext, reopenSession, addCourt, removeCourt, planCourtRemoval, swapOutOfNext, sendBack, setCourts, setStatus, substitute,
 } from './session'
 import { standings, summarize, countMatches, pairKey } from './stats'
 import { validateScore } from './validate'
@@ -278,11 +278,6 @@ describe('courts and sessions', () => {
     expect(s.courts[1].match).not.toBeNull()
   })
 
-  it('never removes a court with a live game', () => {
-    let s = createSession('t', { courts: 2 }, names(8))
-    s = setCourts(s, 1)
-    expect(s.courts).toHaveLength(2)
-  })
 
   it('previews upcoming matches without touching state', () => {
     const s = createSession('t', { courts: 1 }, names(12))
@@ -628,5 +623,109 @@ describe('fixing mistakes in match history', () => {
     expect(s.matches).toHaveLength(0)
     expect(standings(s).every((p) => p.played === 0)).toBe(true)
     expect(s.courts[0].match).not.toBeNull()
+  })
+})
+
+
+describe('removing a court mid-session', () => {
+  const ids = (c: { match: { a: string[]; b: string[] } | null }) => (c.match ? [...c.match.a, ...c.match.b] : [])
+
+  it('can remove a court while a game is on it', () => {
+    let s = createSession('t', { courts: 2 }, names(12))
+    const doomed = s.courts[1].id
+    s = removeCourt(s, doomed)
+    expect(s.courts).toHaveLength(1)
+    expect(s.config.courts).toBe(1)
+    expect(s.courts.some((c) => c.id === doomed)).toBe(false)
+  })
+
+  it('one court is always required', () => {
+    let s = createSession('t', { courts: 1 }, names(8))
+    expect(planCourtRemoval(s, s.courts[0].id)).toBeNull()
+    expect(removeCourt(s, s.courts[0].id)).toBe(s)
+    s = setCourts(s, 0)
+    expect(s.courts).toHaveLength(1)
+    let two = createSession('t', { courts: 2 }, names(12))
+    two = setCourts(two, -5)
+    expect(two.courts).toHaveLength(1)
+  })
+
+  it('a live game moves to a free court instead of being lost', () => {
+    // 4 players, 2 courts: Court 1 plays, Court 2 is free (nobody to fill it).
+    let s = createSession('t', { courts: 2 }, names(4))
+    const live = s.courts.find((c) => c.match)!
+    const free = s.courts.find((c) => !c.match)!
+    const players = ids(live).sort()
+    expect(planCourtRemoval(s, live.id)).toMatchObject({ kind: 'moved', players: 4, to: free.name })
+    s = removeCourt(s, live.id)
+    expect(s.courts).toHaveLength(1)
+    expect(ids(s.courts[0]).sort()).toEqual(players)
+    expect(s.matches).toHaveLength(0) // not recorded: it is still being played
+  })
+
+  it('with no free court, the game is not recorded and its players go to the front of the line', () => {
+    let s = createSession('t', { courts: 2 }, names(12))
+    const doomed = s.courts[1]
+    const cut = ids(doomed)
+    expect(planCourtRemoval(s, doomed.id)).toMatchObject({ kind: 'queued', players: 4 })
+    s = removeCourt(s, doomed.id)
+    expect(s.matches).toHaveLength(0)
+    const next = previewQueue(s, 1)[0]
+    expect([...next.a, ...next.b!].sort()).toEqual([...cut].sort())
+  })
+
+  it('removing an idle court changes nothing for players', () => {
+    let s = createSession('t', { courts: 3 }, names(8))
+    const idle = s.courts.find((c) => !c.match)!
+    expect(planCourtRemoval(s, idle.id)).toMatchObject({ kind: 'idle' })
+    const before = s.courts.filter((c) => c.match).map((c) => ids(c).join())
+    s = removeCourt(s, idle.id)
+    expect(s.courts).toHaveLength(2)
+    expect(s.courts.filter((c) => c.match).map((c) => ids(c).join())).toEqual(before)
+  })
+
+  it('can remove any court, not just the last one, and play carries on', () => {
+    let s = createSession('t', { courts: 3 }, names(14))
+    const middle = s.courts[1].id
+    s = removeCourt(s, middle)
+    expect(s.courts.map((c) => c.name)).toEqual(['Court 1', 'Court 3'])
+    s = simulate(s, 6)
+    expect(s.matches.length).toBeGreaterThan(0)
+    expect(spread(s)).toBeLessThanOrEqual(2)
+  })
+
+  it('new courts never reuse a name that is still in use', () => {
+    let s = createSession('t', { courts: 3 }, names(14))
+    s = removeCourt(s, s.courts[1].id) // Court 1, Court 3
+    s = addCourt(s)
+    const n = s.courts.map((c) => c.name)
+    expect(new Set(n).size).toBe(n.length)
+    expect(n).toEqual(['Court 1', 'Court 3', 'Court 2'])
+  })
+
+  it('never puts a player on two courts after removing and re-adding', () => {
+    let s = createSession('t', { courts: 3 }, names(14))
+    s = removeCourt(s, s.courts[0].id)
+    s = addCourt(s)
+    s = removeCourt(s, s.courts[1].id)
+    const all = s.courts.flatMap(ids)
+    expect(new Set(all).size).toBe(all.length)
+  })
+
+  it('removing a challenger court keeps the other courts rotating', () => {
+    let s = createSession('t', { courts: 2, challengerCourt: true, maxStreak: 4 }, names(12))
+    s = removeCourt(s, s.courts[0].id)
+    expect(s.courts).toHaveLength(1)
+    s = finishMatch(s, s.courts[0].id, { winner: 'a', scoreA: 11, scoreB: 3 })
+    expect(s.courts[0].match!.streak).toBe(0)
+  })
+
+  it('setCourts still adds and removes in bulk', () => {
+    let s = createSession('t', { courts: 2 }, names(14))
+    s = setCourts(s, 5)
+    expect(s.courts).toHaveLength(5)
+    s = setCourts(s, 2)
+    expect(s.courts).toHaveLength(2)
+    expect(s.config.courts).toBe(2)
   })
 })

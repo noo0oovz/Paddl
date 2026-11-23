@@ -207,7 +207,8 @@ export function awards(s: Session): Award[] {
   if (clutch.size) {
     const best = Math.max(...clutch.values())
     const ids = [...clutch].filter(([, n]) => n === best).map(([id]) => id)
-    out.push({
+    // Naming a big group for a single close win is noise, not an award: need a small group, or 2+ close wins.
+    if (ids.length <= 2 || best >= 2) out.push({
       id: 'clutch',
       emoji: '🧊',
       title: 'Clutch Closer',

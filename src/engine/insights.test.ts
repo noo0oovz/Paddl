@@ -304,3 +304,28 @@ describe('ETA is never over-optimistic', () => {
     expect(e.ms).toBeLessThanOrEqual(12 * 60_000)
   })
 })
+
+describe('Clutch Closer needs a real standout', () => {
+  it('is skipped when many players tie on a single close win', () => {
+    const s = createSession('t', { courts: 1 }, names(8))
+    const [a, b, c, d, e, f, g, h] = ids(s)
+    // two close games, each won by a different team: 4 + 4 winners, each with exactly one close win.
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 9), game(s, 1, [e, f], [g, h], 11, 9)]
+    expect(awards(s).find((x) => x.id === 'clutch')).toBeUndefined()
+  })
+
+  it('is given when at most two players share the lead', () => {
+    const s = createSession('t', { courts: 1 }, names(4))
+    const [a, b, c, d] = ids(s)
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 9)]
+    const clutch = awards(s).find((x) => x.id === 'clutch')!
+    expect(clutch.winner).toBe('P1 & P2')
+  })
+
+  it('is given to a larger group only when they have 2 or more close wins', () => {
+    const s = createSession('t', { courts: 1 }, names(4))
+    const [a, b, c, d] = ids(s)
+    s.matches = [game(s, 0, [a, b], [c, d], 11, 9), game(s, 1, [a, b], [c, d], 12, 10)]
+    expect(awards(s).find((x) => x.id === 'clutch')!.detail).toContain('2 wins')
+  })
+})

@@ -12,6 +12,7 @@ import History from './components/History'
 import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
 import Help from './components/Help'
+import { useConfirm } from './components/Confirm'
 import MoreMenu from './components/MoreMenu'
 import Tour, { tourSeen } from './components/Tour'
 import { CourtLines, Logo } from './components/art'
@@ -49,13 +50,20 @@ function Shell({ s, tab, setTab, onHelp }: { s: Session; tab: Tab; setTab: (t: T
     { id: 'standings', label: 'Standings', icon: Trophy },
     { id: 'history', label: 'History', icon: HistoryIcon },
   ]
+  const { ask, dialog } = useConfirm()
   function finish() {
     const n = s.matches.length
-    const msg = n === 0 ? 'End this session? No games have been recorded.' : `End the session and see final results? ${n} games will be saved.`
-    if (confirm(msg)) updateActive((x) => endSession(x))
+    ask({
+      title: 'End this session?',
+      body: n === 0 ? 'No games have been recorded yet.' : `You will see the final results, standings and pictures to share. ${n} ${n === 1 ? 'game is' : 'games are'} saved, and you can reopen the session if you end it by mistake.`,
+      confirmLabel: 'End session',
+      danger: true,
+      onConfirm: () => updateActive((x) => endSession(x)),
+    })
   }
   return (
     <div className="flex min-h-full flex-col md:flex-row">
+      {dialog}
       <nav className="sticky top-0 z-20 hidden w-56 shrink-0 flex-col gap-1 self-start border-r border-slate-200 bg-white/70 p-3 backdrop-blur-xl md:flex md:h-dvh dark:border-white/10 dark:bg-slate-950/60">
         <button className="mb-2 px-2 text-left" onClick={() => openSession(null)} title="All sessions">
           <div className="text-xl font-black tracking-tight text-brand">PADDL</div>

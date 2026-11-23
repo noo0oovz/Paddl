@@ -35,7 +35,10 @@ function addPlayerRaw(s: Session, name: string, level: number): Player {
   return p
 }
 
-function makeCourt(s: Session, n: number): Court {
+function makeCourt(s: Session): Court {
+  const used = new Set(s.courts.map((c) => c.name))
+  let n = 1
+  while (used.has(`Court ${n}`)) n++
   return { id: newId(s, 'c'), name: `Court ${n}`, match: null, hold: null }
 }
 
@@ -64,7 +67,7 @@ export function createSession(
     seq: 0,
     nextId: 1,
   }
-  for (let i = 1; i <= cfg.courts; i++) s.courts.push(makeCourt(s, i))
+  for (let i = 1; i <= cfg.courts; i++) s.courts.push(makeCourt(s))
   if (cfg.challengerCourt && cfg.mode !== 'winners') s.courts[0].tags = ['challenger']
   if (cfg.format === 'teams') {
     for (const [x, y] of pairs) addTeamRaw(s, x, y)
@@ -440,18 +443,69 @@ export function deleteMatch(s: Session, id: string): Session {
   })
 }
 
-export function setCourts(s: Session, count: number): Session {
+export const MAX_COURTS = 12
+
+/** Add a court. A free court is filled from the queue straight away. */
+export function addCourt(s: Session): Session {
+  if (s.courts.length >= MAX_COURTS) return s
   return mutate(s, (d) => {
-    const n = Math.max(1, Math.min(12, count))
-    while (d.courts.length < n) d.courts.push(makeCourt(d, d.courts.length + 1))
-    // Only remove empty courts, from the end, so no live game is lost.
-    while (d.courts.length > n) {
-      const last = d.courts[d.courts.length - 1]
-      if (last.match) break
-      d.courts.pop()
-    }
+    d.courts.push(makeCourt(d))
     d.config.courts = d.courts.length
   })
+}
+
+export interface CourtRemoval {
+  /** idle: nothing is playing there. moved: the live game carries on on a free court. queued: no free court, so the players go to the front of the line. */
+  kind: 'idle' | 'moved' | 'queued'
+  players: number
+  to?: string // name of the court the game moves to
+}
+
+/** What removing this court would do, or null when it cannot be removed (at least one court is required). */
+export function planCourtRemoval(s: Session, courtId: string): CourtRemoval | null {
+  const c = s.courts.find((x) => x.id === courtId)
+  if (!c || s.courts.length <= 1) return null
+  if (!c.match) return { kind: 'idle', players: 0 }
+  const players = c.match.a.length + c.match.b.length
+  const target = s.courts.find((x) => x.id !== courtId && !x.match && !x.hold)
+  return target ? { kind: 'moved', players, to: target.name } : { kind: 'queued', players }
+}
+
+/**
+ * Remove a court, even in the middle of a game (one court is always kept).
+ * A game in progress moves to a free court if there is one. Otherwise it is not recorded and its players go
+ * to the front of the line, since their game was cut short and they should not lose their turn.
+ */
+export function removeCourt(s: Session, courtId: string): Session {
+  if (!planCourtRemoval(s, courtId)) return s
+  return mutate(s, (d) => {
+    const c = d.courts.find((x) => x.id === courtId)!
+    const m = c.match
+    d.courts = d.courts.filter((x) => x.id !== courtId)
+    d.config.courts = d.courts.length
+    if (!m) return // winners holding an idle court are simply released: they are no longer "busy"
+    const target = d.courts.find((x) => !x.match && !x.hold)
+    if (target) {
+      target.match = m
+      return
+    }
+    const ids = new Set([...m.a, ...m.b])
+    const at = d.nextId++
+    for (const p of d.players) if (ids.has(p.id)) { p.prio = 'front'; p.prioAt = at }
+  })
+}
+
+/** Set the number of courts. Adding is immediate; removing takes courts from the end (see removeCourt). */
+export function setCourts(s: Session, count: number): Session {
+  const n = Math.max(1, Math.min(MAX_COURTS, count))
+  let cur = s
+  while (cur.courts.length < n) {
+    const next = addCourt(cur)
+    if (next === cur) break
+    cur = next
+  }
+  while (cur.courts.length > n) cur = removeCourt(cur, cur.courts[cur.courts.length - 1].id)
+  return cur
 }
 
 export function setConfig(s: Session, patch: Partial<Config>): Session {

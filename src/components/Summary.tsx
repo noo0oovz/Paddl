@@ -1,5 +1,5 @@
 import { forwardRef, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, Download, Share2, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, ChevronDown, Download, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
 import { awards, type Award } from '../engine/insights'
@@ -8,9 +8,15 @@ import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
 import { reopenSession } from '../engine/session'
 import { removeSession, updateActive } from '../store'
 import { medal } from './Standings'
+import { HistorySection, Highlights, ParticipationSection, Podium, StandingsSection, StatStrip, minutes } from './ResultsView'
+import { CourtLines } from './art'
 import ThemeSwitch from './ThemeSwitch'
+import { useConfirm } from './Confirm'
 
-const C = { ink: '#0f172a', mute: '#64748b', line: '#e2e8f0', soft: '#f1f5f9', green: '#16a34a', dark: '#14532d' }
+const C = { ink: '#0b1121', mute: '#5f6d89', line: '#e2e8f4', soft: '#eef2f9', green: '#3f6b00', lime: '#b6ff3b', dark: '#05070d', cyan: '#22d3ee' }
+
+/** Dark neon header used on every saved picture, so they read as Paddl wherever they are shared. */
+const HEADER_BG = `radial-gradient(520px 220px at 0% 0%, rgba(182,255,59,0.28), transparent 60%), radial-gradient(520px 220px at 100% 0%, rgba(34,211,238,0.22), transparent 60%), linear-gradient(135deg, #0b1121, #05070d)`
 
 export type Part = 'standings' | 'participation' | 'history'
 
@@ -24,8 +30,8 @@ function Frame({ s, title, children }: { s: Session; title: string; children: Re
   const sum = summarize(s)
   return (
     <>
-      <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.dark})`, color: '#fff', padding: '26px 32px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, opacity: 0.85 }}>PADDL · {title}</div>
+      <div style={{ background: HEADER_BG, color: '#fff', padding: '26px 32px', borderBottom: `3px solid ${C.lime}` }}>
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 2.5, color: C.lime }}>PADDL · {title}</div>
         <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
         <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
           {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
@@ -47,14 +53,14 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
   const champ = rows[0] && rows[0].wins > 0 ? rows[0] : null
   return (
     <div ref={ref} style={{ width: 720, background: '#ffffff', color: C.ink, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}>
-      <div style={{ background: `linear-gradient(135deg, ${C.green}, ${C.dark})`, color: '#fff', padding: '30px 32px 26px' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 2, opacity: 0.85 }}>PADDL · SESSION RECAP</div>
+      <div style={{ background: HEADER_BG, color: '#fff', padding: '30px 32px 26px', borderBottom: `3px solid ${C.lime}` }}>
+        <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 2.5, color: C.lime }}>PADDL · SESSION RECAP</div>
         <div style={{ fontSize: 36, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
         <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
           {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
         </div>
         {champ && (
-          <div style={{ marginTop: 18, background: 'rgba(255,255,255,0.16)', borderRadius: 16, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ marginTop: 18, background: 'rgba(182,255,59,0.12)', border: '1px solid rgba(182,255,59,0.35)', borderRadius: 16, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
             <div style={{ fontSize: 44 }}>🏆</div>
             <div>
               <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>TOP OF THE LADDER</div>
@@ -143,7 +149,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
               <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9, fontSize: 15 }}>
                 <div style={{ width: 130, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
                 <div style={{ flex: 1, height: 16, background: C.soft, borderRadius: 8, overflow: 'hidden' }}>
-                  <div style={{ width: `${(r.played / maxPlayed) * 100}%`, height: '100%', background: C.green }} />
+                  <div style={{ width: `${(r.played / maxPlayed) * 100}%`, height: '100%', background: `linear-gradient(90deg, ${C.green}, #7fcb00)` }} />
                 </div>
                 <div style={{ width: 150, textAlign: 'right', color: C.mute, fontSize: 14, whiteSpace: 'nowrap' }}>
                   <b style={{ color: C.ink }}>{r.played}</b> {r.played === 1 ? 'game' : 'games'} · <b style={{ color: C.ink }}>{minutes(r.playMs)}</b>
@@ -183,15 +189,6 @@ function Fact({ label, value, sub }: { label: string; value: string; sub: string
   )
 }
 
-/** Time on court as minutes ("38 min", "1 h 5 min"); under a minute shows "<1 min", no data shows a dash. */
-export function minutes(ms: number): string {
-  if (ms <= 0) return '–'
-  const m = Math.round(ms / 60000)
-  if (m < 1) return '<1 min'
-  if (m < 60) return `${m} min`
-  return `${Math.floor(m / 60)} h ${m % 60} min`
-}
-
 function partFile(s: Session, part: Part, n: number): string {
   return fileName(s.name).replace(/\.png$/, `-${n}-${part}.png`)
 }
@@ -203,7 +200,6 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const sum = summarize(s)
-  const top = standings(s).slice(0, 3)
   const recapAwards: Award[] = awards(s)
 
   async function makeOne(part: Part): Promise<Blob> {
@@ -296,69 +292,92 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
     }
   }
 
+  const rows = standings(s)
+  const [preview, setPreview] = useState(false)
+  const { ask, dialog } = useConfirm()
+  const champ = rows[0] && rows[0].wins > 0 ? rows[0] : null
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-10">
+      {dialog}
       <div className="mb-2 flex items-center justify-between">
         <button className="btn-ghost -ml-3" onClick={onBack}><ArrowLeft size={18} /> Back</button>
         <ThemeSwitch compact />
       </div>
-      <div className="text-xs font-bold tracking-widest text-green-700 dark:text-green-400">FINAL RESULTS</div>
-      <h1 className="text-2xl font-extrabold">{s.name}</h1>
-      <p className="text-sm text-slate-500">{fmtDate(s.createdAt)} · {sum.matches} games · {fmtDuration(sum.durationMs)}</p>
 
-      {top[0] && top[0].wins > 0 && (
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          {top.map((p, i) => (
-            <div key={p.id} className="card p-3">
-              <div className="text-2xl">{medal(i)}</div>
-              <div className="truncate font-bold">{p.name}</div>
-              <div className="text-xs text-slate-500">{p.wins}W – {p.losses}L</div>
-            </div>
-          ))}
+      <header className="card relative overflow-hidden px-5 pt-6 pb-5">
+        <CourtLines className="pointer-events-none absolute -right-24 -top-10 w-60 text-slate-400/10 [mask-image:linear-gradient(to_left,#000,transparent_85%)] dark:text-accent/[0.08]" />
+        <div className="relative">
+          <div className="flex items-center gap-2 text-[11px] font-black tracking-[0.25em] text-brand"><span className="live-dot" /> FINAL RESULTS</div>
+          <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">{s.name}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}</p>
+          {champ && <p className="mt-3 text-sm font-semibold">👑 <span className="font-black">{champ.name}</span> takes the night with {champ.wins} {champ.wins === 1 ? 'win' : 'wins'}.</p>}
         </div>
-      )}
+      </header>
+
+      <Podium rows={rows} />
+      <StatStrip s={s} />
 
       {recapAwards.length > 0 && (
-        <section className="mt-5">
-          <h2 className="mb-2 flex items-center gap-2 text-lg font-extrabold"><Sparkles size={18} className="text-amber-500" /> Session awards</h2>
+        <section className="mt-6">
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-black tracking-tight"><Sparkles size={18} className="text-amber-400" /> Session awards</h2>
           <div className="grid gap-2 sm:grid-cols-2">
             {recapAwards.map((a) => (
-              <div key={a.id} className="card paddl-in flex items-start gap-3 p-3">
-                <div className="text-3xl leading-none">{a.emoji}</div>
+              <div key={a.id} className="card paddl-in relative flex items-start gap-3 overflow-hidden p-3">
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-accent/70" />
+                <div className="pl-1 text-3xl leading-none">{a.emoji}</div>
                 <div className="min-w-0">
-                  <div className="text-[11px] font-bold tracking-widest text-slate-500 uppercase">{a.title}</div>
-                  <div className="font-extrabold break-words">{a.winner}</div>
+                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">{a.title}</div>
+                  <div className="font-black break-words">{a.winner}</div>
                   <div className="text-sm text-slate-500 dark:text-slate-400">{a.detail}</div>
                 </div>
               </div>
             ))}
           </div>
-          <div className="mt-3 flex gap-2">
-            <button className="btn-soft flex-1" onClick={() => recap(false)} disabled={busy}><Download size={16} /> Save recap card</button>
-            {typeof navigator !== 'undefined' && 'share' in navigator && (
-              <button className="btn-soft flex-1" onClick={() => recap(true)} disabled={busy}><Share2 size={16} /> Share recap</button>
-            )}
-          </div>
         </section>
       )}
 
-      <div className="sticky top-0 z-10 -mx-4 mt-4 flex gap-2 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-        <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save images (3)'}</button>
-        {typeof navigator !== 'undefined' && 'share' in navigator && (
-          <button className="btn-soft flex-1 !min-h-12" onClick={shareAll} disabled={busy}><Share2 size={18} /> Share</button>
-        )}
-      </div>
-      {msg && <p className="mt-2 text-sm font-medium text-green-700 dark:text-green-400" role="status">{msg}</p>}
+      <Highlights s={s} />
+      <StandingsSection s={s} />
+      <ParticipationSection s={s} />
+      <HistorySection s={s} />
 
-      <p className="mt-4 mb-2 text-xs text-slate-500">Save images creates these three pictures. Tap one to save just that image.</p>
-      <div className="space-y-5">
+      {/* Share panel: the saved pictures are made from this same data. */}
+      <section className="card relative mt-6 overflow-hidden p-4">
+        <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-accent shadow-[0_0_14px_rgba(182,255,59,0.9)]" />
+        <h2 className="flex items-center gap-2 text-lg font-black tracking-tight">📸 Share the results</h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">Save pictures for the group chat: standings, games played, and match history.</p>
+        <div className="mt-3 flex gap-2">
+          <button className="btn-primary flex-1 !min-h-12" onClick={saveAll} disabled={busy}><Download size={18} /> {busy ? 'Creating…' : 'Save images (3)'}</button>
+          {typeof navigator !== 'undefined' && 'share' in navigator && (
+            <button className="btn-soft flex-1 !min-h-12" onClick={shareAll} disabled={busy}><Share2 size={18} /> Share</button>
+          )}
+        </div>
+        {recapAwards.length > 0 && (
+          <div className="mt-2 flex gap-2">
+            <button className="btn-soft flex-1" onClick={() => recap(false)} disabled={busy}><Download size={16} /> Save awards card</button>
+            {typeof navigator !== 'undefined' && 'share' in navigator && (
+              <button className="btn-soft flex-1" onClick={() => recap(true)} disabled={busy}><Share2 size={16} /> Share awards</button>
+            )}
+          </div>
+        )}
+        {msg && <p className="mt-3 text-sm font-semibold text-brand" role="status">{msg}</p>}
+
+        <button className="mt-3 flex w-full items-center justify-between text-left text-sm font-semibold text-slate-500 dark:text-slate-400" onClick={() => setPreview((v) => !v)} aria-expanded={preview}>
+          <span>Preview the pictures</span>
+          <ChevronDown size={16} className={`transition ${preview ? 'rotate-180' : ''}`} />
+        </button>
+      </section>
+
+      {/* The pictures are always rendered (so saving works) but only shown on request; saved images stay light and unchanged. */}
+      <div className={preview ? 'mt-3 space-y-5' : 'sr-only'} aria-hidden={!preview}>
         {PARTS.map((p, i) => (
           <div key={p.id}>
             <div className="mb-1.5 flex items-center justify-between">
               <div className="text-sm font-bold">{i + 1}. {p.label}</div>
               <button className="btn-soft !min-h-9 !px-3" onClick={() => saveOne(p.id, i + 1)} disabled={busy}><Download size={15} /> Save</button>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm dark:border-slate-800">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm dark:border-white/10">
               <div className="mx-auto w-fit"><ShareCard ref={(el) => { refs.current[p.id] = el }} s={s} part={p.id} /></div>
             </div>
           </div>
@@ -367,15 +386,15 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
 
       <div aria-hidden="true" style={{ position: 'fixed', left: -10000, top: 0, pointerEvents: 'none' }}><RecapCard ref={recapRef} s={s} /></div>
 
-      <button className="btn-soft mt-6 w-full" onClick={() => updateActive((x) => reopenSession(x))}>
-        Ended by mistake? Reopen this session
-      </button>
-      <button
-        className="btn-ghost mt-2 w-full text-red-600"
-        onClick={() => { if (confirm('Delete this session and its history for good?')) { removeSession(s.id); onBack() } }}
-      >
-        <Trash2 size={16} /> Delete this session
-      </button>
+      <div className="mt-8 space-y-2">
+        <button className="btn-soft w-full" onClick={() => updateActive((x) => reopenSession(x))}>↩️ Ended by mistake? Reopen this session</button>
+        <button
+          className="btn-ghost w-full text-red-600"
+          onClick={() => ask({ title: 'Delete this session?', body: 'Its results and match history are removed for good. This cannot be undone.', confirmLabel: 'Delete it', danger: true, onConfirm: () => { removeSession(s.id); onBack() } })}
+        >
+          <Trash2 size={16} /> Delete this session
+        </button>
+      </div>
     </div>
   )
 }

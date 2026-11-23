@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Tag, Trophy, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
+import { ArrowDownToLine, Settings2, Trash2, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Trophy, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
 import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, gamesOf, nameOf } from '../engine/stats'
 import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
+import { useConfirm } from './Confirm'
 import {
-  addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, setCourts, setLevel,
+  addCourt, addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, planCourtRemoval, removeCourt, MAX_COURTS, setLevel,
   setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
@@ -99,10 +100,12 @@ export default function Live({ s }: { s: Session }) {
               <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} onWin={(side) => { updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null })); flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
-          <div className="flex items-center justify-center gap-3 text-sm">
-            <button className="btn-ghost" onClick={() => updateActive((x) => setCourts(x, s.courts.length - 1))} disabled={s.courts.length <= 1 || !!s.courts[s.courts.length - 1].match}>− Court</button>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
             <span className="text-slate-500">{s.courts.length} {s.courts.length === 1 ? 'court' : 'courts'}</span>
-            <button className="btn-ghost" onClick={() => updateActive((x) => setCourts(x, s.courts.length + 1))}>+ Court</button>
+            <button className="btn-soft !min-h-10" onClick={() => { updateActive((x) => addCourt(x)); flash('Court added. It fills from the queue straight away.') }} disabled={s.courts.length >= MAX_COURTS}>
+              <Plus size={16} /> Add court
+            </button>
+            <span className="text-xs text-slate-400">To remove one, tap its <Settings2 size={12} className="inline" /> icon.</span>
           </div>
         </div>
 
@@ -169,7 +172,7 @@ export default function Live({ s }: { s: Session }) {
       {court?.match && <ScoreSheet s={s} court={court} onClose={() => setScoring(null)} />}
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
-      {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} />}
+      {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} onNote={flash} />}
       {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
       {subFor && <SubSheet s={s} courtId={subFor.court} outId={subFor.id} onClose={() => setSubFor(null)} />}
     </div>
@@ -187,7 +190,7 @@ function CourtCard({ s, c, now, onScore, onSub, onRemix, onWin, onTags }: { s: S
       <div className="relative flex items-center justify-between border-b border-slate-200 bg-slate-900 px-4 py-2.5 text-white dark:border-white/10 dark:bg-white/[0.04]">
         <span aria-hidden className={`absolute inset-x-0 top-0 h-0.5 ${m ? 'bg-accent shadow-[0_0_14px_rgba(182,255,59,0.9)]' : 'bg-slate-600'}`} />
         <h2 className="font-bold">{c.name}</h2>
-        <button onClick={onTags} className="ml-2 grid h-7 w-7 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} rules and badges`} title="Court badges"><Tag size={14} /></button>
+        <button onClick={onTags} className="ml-2 grid h-7 w-7 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} settings`} title="Court settings: badges and remove"><Settings2 size={14} /></button>
         <span className="flex-1" />
         {m && (
           <span className="flex items-center gap-1 text-xs font-medium text-slate-300">
@@ -260,6 +263,7 @@ function Side({ s, ids, onSub, holders }: { s: Session; ids: string[]; onSub: (i
 }
 
 function ScoreSheet({ s, court, onClose }: { s: Session; court: Court; onClose: () => void }) {
+  const { ask, dialog } = useConfirm()
   const m = court.match!
   const [a, setA] = useState('')
   const [b, setB] = useState('')
@@ -280,6 +284,7 @@ function ScoreSheet({ s, court, onClose }: { s: Session; court: Court; onClose: 
   }
 
   return (
+    <>
     <Sheet title={`${court.name}: score or result`} onClose={onClose}>
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
@@ -311,26 +316,31 @@ function ScoreSheet({ s, court, onClose }: { s: Session; court: Court; onClose: 
           <button className="btn-soft flex-1" onClick={() => done({ winner: null, scoreA: null, scoreB: null })}><Ban size={16} /> No contest</button>
           <button
             className="btn-ghost flex-1 text-red-600"
-            onClick={() => {
-              if (confirm('Cancel this game without recording it? Everyone goes back to the queue.')) {
-                updateActive((x) => cancelMatch(x, court.id))
-                onClose()
-              }
-            }}
+            onClick={() => ask({
+              title: 'Cancel this game?',
+              body: 'It will not be recorded, and everyone goes back to the queue.',
+              confirmLabel: 'Cancel game',
+              danger: true,
+              onConfirm: () => { updateActive((x) => cancelMatch(x, court.id)); onClose() },
+            })}
           >
             Cancel game
           </button>
         </div>
       </div>
     </Sheet>
+    {dialog}
+    </>
   )
 }
 
 function SubSheet({ s, courtId, outId, onClose }: { s: Session; courtId: string; outId: string; onClose: () => void }) {
+  const { ask, dialog } = useConfirm()
   const waiting = waitingUnits(s).flatMap((u) => u.ids)
   const counts = countMatches(s.matches)
   const teams = s.config.format === 'teams'
   return (
+    <>
     <Sheet title={`${nameOf(s, outId)} is on court`} onClose={onClose}>
       <div className="space-y-3">
         {waiting.length > 0 && (
@@ -353,10 +363,12 @@ function SubSheet({ s, courtId, outId, onClose }: { s: Session; courtId: string;
         )}
         <div className="flex gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
           <button className="btn-soft flex-1" onClick={() => { updateActive((x) => setStatus(x, outId, 'resting')); onClose() }}><Moon size={16} /> Take a break</button>
-          <button className="btn-ghost flex-1 text-red-600" onClick={() => { if (confirm(`${nameOf(s, outId)} has left for the day?`)) { updateActive((x) => setStatus(x, outId, 'left')); onClose() } }}>Left</button>
+          <button className="btn-ghost flex-1 text-red-600" onClick={() => ask({ title: `${nameOf(s, outId)} is leaving?`, body: 'They are taken off the court and out of the queue. Their results stay.', confirmLabel: 'They left', danger: true, onConfirm: () => { updateActive((x) => setStatus(x, outId, 'left')); onClose() } })}>Left</button>
         </div>
       </div>
     </Sheet>
+    {dialog}
+    </>
   )
 }
 
@@ -516,6 +528,7 @@ function TeamBox({ s, ids, onPick, onSwap, canSwap }: { s: Session; ids: string[
 }
 
 function WaitSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => void }) {
+  const { ask, dialog } = useConfirm()
   const p = s.players.find((x) => x.id === id)
   const teams = s.config.format === 'teams'
   const live = s.courts.filter((c) => c.match)
@@ -526,6 +539,7 @@ function WaitSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => 
   if (!p) return null
   const title = teams ? (s.teams.find((t) => t.playerIds.includes(id))?.name ?? p.name) : p.name
   return (
+    <>
     <Sheet title={title} onClose={onClose}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-2">
@@ -556,18 +570,22 @@ function WaitSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => 
 
         <div className="flex gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
           <button className="btn-soft flex-1" onClick={() => done((x) => setStatus(x, id, 'resting'))}><Moon size={16} /> Take a break</button>
-          <button className="btn-ghost flex-1 text-red-600" onClick={() => { if (confirm(`${p.name} has left for the day?`)) done((x) => setStatus(x, id, 'left')) }}>Left</button>
+          <button className="btn-ghost flex-1 text-red-600" onClick={() => ask({ title: `${p.name} is leaving?`, body: 'They are taken out of the queue. Their results stay.', confirmLabel: 'They left', danger: true, onConfirm: () => done((x) => setStatus(x, id, 'left')) })}>Left</button>
         </div>
       </div>
     </Sheet>
+    {dialog}
+    </>
   )
 }
 
-function TagSheet({ s, courtId, onClose }: { s: Session; courtId: string; onClose: () => void }) {
+function TagSheet({ s, courtId, onClose, onNote }: { s: Session; courtId: string; onClose: () => void; onNote: (m: string) => void }) {
   const c = s.courts.find((x) => x.id === courtId)
+  const [confirm, setConfirm] = useState(false)
   if (!c) return null
+  const plan = planCourtRemoval(s, c.id)
   return (
-    <Sheet title={`${c.name}: rules and badges`} onClose={onClose}>
+    <Sheet title={`${c.name} settings`} onClose={onClose}>
       <div className="space-y-2">
         <p className="text-sm text-slate-500">Badges show on the court card and the board so everyone knows what to expect before stepping on.</p>
         {(Object.keys(COURT_TAGS) as CourtTag[]).map((tag) => {
@@ -589,6 +607,37 @@ function TagSheet({ s, courtId, onClose }: { s: Session; courtId: string; onClos
             </button>
           )
         })}
+
+        <div className="border-t border-slate-200 pt-3 dark:border-white/10">
+          <div className="label">Remove this court</div>
+          {!plan ? (
+            <p className="text-sm text-slate-500 dark:text-slate-400">You need at least one court, so the last one cannot be removed.</p>
+          ) : !confirm ? (
+            <button className="btn-ghost w-full justify-start text-red-600" onClick={() => setConfirm(true)}><Trash2 size={16} /> Remove {c.name}</button>
+          ) : (
+            <div className="rounded-xl border-2 border-red-300 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950/40">
+              <p className="text-sm font-semibold text-red-900 dark:text-red-200">Remove {c.name}?</p>
+              <p className="mt-1 text-xs text-red-800 dark:text-red-300">
+                {plan.kind === 'idle' && 'Nothing is playing on it, so nobody is affected.'}
+                {plan.kind === 'moved' && `A game is in progress. It will carry on, with the same players and clock, on ${plan.to}.`}
+                {plan.kind === 'queued' && `A game is in progress and no other court is free. It will not be recorded, and its ${plan.players} players go to the front of the line so they do not lose their turn.`}
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <button className="btn-soft" onClick={() => setConfirm(false)}>Keep it</button>
+                <button
+                  className="btn-danger"
+                  onClick={() => {
+                    updateActive((x) => removeCourt(x, c.id))
+                    onNote(`${c.name} removed.${plan.kind === 'moved' ? ` The game moved to ${plan.to}.` : plan.kind === 'queued' ? ' Its players are first in line.' : ''} Undo is at the top.`)
+                    onClose()
+                  }}
+                >
+                  Yes, remove
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Sheet>
   )
