@@ -1,3 +1,4 @@
+import { awardsByName } from '../engine/insights'
 import { standings } from '../engine/stats'
 import type { Session } from '../engine/types'
 import { Empty } from './ui'
@@ -8,6 +9,8 @@ export function medal(i: number): string {
 
 export default function Standings({ s }: { s: Session }) {
   const rows = standings(s)
+  const scored = rows.some((r) => r.pf + r.pa > 0)
+  const badges = awardsByName(s)
   if (!s.players.length) return <Empty scene="players" title="No players yet" hint="Open Courts, then Players, to add some." />
   const played = s.matches.length > 0
   return (
@@ -23,7 +26,7 @@ export default function Standings({ s }: { s: Session }) {
               <th className="px-2 py-2.5 text-right">W</th>
               <th className="px-2 py-2.5 text-right">L</th>
               <th className="px-2 py-2.5 text-right">Win %</th>
-              <th className="px-2 py-2.5 text-right">+/−</th>
+              <th className="px-2 py-2.5 text-right">{scored ? '+/−' : 'Awards'}</th>
               <th className="px-3 py-2.5 text-right">GP</th>
             </tr>
           </thead>
@@ -38,14 +41,21 @@ export default function Standings({ s }: { s: Session }) {
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.wins}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.losses}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.wins + r.losses ? Math.round(r.winPct * 100) : '–'}</td>
-                <td className={`px-2 py-2.5 text-right tabular-nums ${r.diff > 0 ? 'text-green-600' : r.diff < 0 ? 'text-red-600' : ''}`}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
+                {scored ? (
+                  <td className={`px-2 py-2.5 text-right tabular-nums ${r.diff > 0 ? 'text-green-600' : r.diff < 0 ? 'text-red-600' : ''}`}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
+                ) : (
+                  <td className="px-2 py-2.5 text-right whitespace-nowrap">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
+                )}
                 <td className="px-3 py-2.5 text-right tabular-nums">{r.played}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Ranked by win rate (small samples are smoothed), then point difference. GP = games played.</p>
+      {!scored && [...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].length > 0 && (
+        <p className="mt-2 text-xs text-slate-500">{[...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].map((a) => `${a.emoji} ${a.title}`).join('  ·  ')}</p>
+      )}
+      <p className="mt-2 text-xs text-slate-500">Ranked by win rate (small samples are smoothed){scored ? ', then point difference' : ''}. GP = games played.</p>
     </div>
   )
 }

@@ -143,6 +143,7 @@ export interface Award {
   winner: string // player or duo name(s); every tied name is listed
   detail: string // the stat behind it, in plain words (starts with "3-way tie" when shared)
   tied?: number // how many share the award (only set when more than one)
+  who?: string[] // the individual names that hold it, so a standings row can show the badge
 }
 
 /** A game is "close" when the winner won by 2 or less and the score reached the target. */
@@ -179,10 +180,11 @@ function listNames(names: string[]): string {
  * Turn the people who share an award into its winner text, detail and tie count. Returns null when the tie is so
  * wide it means nothing (more than half of everyone shares it), so the award is skipped.
  */
-function shared(names: string[], field: number, detail: string): { winner: string; detail: string; tied?: number } | null {
+function shared(names: string[], field: number, detail: string): { winner: string; detail: string; tied?: number; who: string[] } | null {
   if (names.length > 1 && names.length > field / 2 && field >= 4) return null
   return {
     winner: listNames(names),
+    who: names,
     detail: names.length > 1 ? `${names.length}-way tie · ${detail}` : detail,
     ...(names.length > 1 ? { tied: names.length } : {}),
   }
@@ -300,10 +302,18 @@ export function awards(s: Session): Award[] {
       title: 'Dynamic Duo',
       winner: duo.ids.map((id) => byId.get(id)?.name ?? '?').join(' & '),
       detail: `${duo.w}–${duo.l} as partners`,
+      who: duo.ids.map((id) => byId.get(id)?.name ?? '?'),
     })
   }
 
   return out
+}
+
+/** The awards each player or team holds, by name, for the standings tables. */
+export function awardsByName(s: Session): Map<string, Award[]> {
+  const map = new Map<string, Award[]>()
+  for (const a of awards(s)) for (const n of a.who ?? []) map.set(n, [...(map.get(n) ?? []), a])
+  return map
 }
 
 function partnersOf(s: Session, id: string): string[] {

@@ -4,6 +4,7 @@ import type { Session } from '../engine/types'
 import { PaddleBall } from './art'
 import { nameOf, standings, summarize, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
+import { awardsByName } from '../engine/insights'
 
 /** Time on court as minutes ("38 min", "1 h 5 min"); under a minute shows "<1 min", no data shows a dash. */
 export function minutes(ms: number): string {
@@ -101,8 +102,10 @@ function Section({ emoji, title, hint, children, defaultOpen = true }: { emoji: 
 
 export function StandingsSection({ s }: { s: Session }) {
   const rows = standings(s)
+  const scored = rows.some((r) => r.pf + r.pa > 0)
+  const badges = awardsByName(s)
   return (
-    <Section emoji="🏆" title="Final standings" hint="Ranked by win rate, then point difference">
+    <Section emoji="🏆" title="Final standings" hint={scored ? 'Ranked by win rate, then point difference' : 'Ranked by win rate'}>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[340px] text-sm">
           <thead>
@@ -112,7 +115,7 @@ export function StandingsSection({ s }: { s: Session }) {
               <th className="px-2 py-2 text-right">W</th>
               <th className="px-2 py-2 text-right">L</th>
               <th className="px-2 py-2 text-right">Win %</th>
-              <th className="px-4 py-2 text-right">+/−</th>
+              <th className="px-4 py-2 text-right">{scored ? '+/−' : 'Awards'}</th>
             </tr>
           </thead>
           <tbody>
@@ -123,14 +126,21 @@ export function StandingsSection({ s }: { s: Session }) {
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.wins}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.losses}</td>
                 <td className="px-2 py-2.5 text-right tabular-nums">{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
-                <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.diff > 0 ? 'text-brand' : r.diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                  {r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}
-                </td>
+                {scored ? (
+                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.diff > 0 ? 'text-brand' : r.diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                    {r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}
+                  </td>
+                ) : (
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {!scored && [...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].length > 0 && (
+        <p className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400">{[...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].map((a) => `${a.emoji} ${a.title}`).join('  ·  ')}</p>
+      )}
     </Section>
   )
 }

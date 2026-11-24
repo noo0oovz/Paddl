@@ -2,7 +2,7 @@ import { forwardRef, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, Download, FileSpreadsheet, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
-import { awards, type Award } from '../engine/insights'
+import { awards, awardsByName, type Award } from '../engine/insights'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
 import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
 import { reopenSession } from '../engine/session'
@@ -96,6 +96,7 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
 /** Fixed-width, always-light card that gets rendered to PNG. Inline styles keep it identical in any theme. */
 export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
   const rows = standings(s)
+  const badges = awardsByName(s)
   const sum = summarize(s)
   const maxPlayed = Math.max(1, ...rows.map((r) => r.played))
   const history = [...s.matches].sort((a, b) => a.seq - b.seq)
@@ -113,7 +114,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
                   <th style={{ padding: '4px 6px' }}>W</th>
                   <th style={{ padding: '4px 6px' }}>L</th>
                   <th style={{ padding: '4px 6px' }}>WIN %</th>
-                  <th style={{ padding: '4px 6px' }}>+/−</th>
+                  <th style={{ padding: '4px 6px' }}>{rows.some((r) => r.pf + r.pa > 0) ? '+/−' : 'AWARDS'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -124,7 +125,11 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
                     <td style={{ padding: '8px 6px' }}>{r.wins}</td>
                     <td style={{ padding: '8px 6px' }}>{r.losses}</td>
                     <td style={{ padding: '8px 6px' }}>{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
-                    <td style={{ padding: '8px 6px', color: r.diff > 0 ? C.green : r.diff < 0 ? '#dc2626' : C.mute, fontWeight: 600 }}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
+                    {rows.some((x) => x.pf + x.pa > 0) ? (
+                      <td style={{ padding: '8px 6px', color: r.diff > 0 ? C.green : r.diff < 0 ? '#dc2626' : C.mute, fontWeight: 600 }}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
+                    ) : (
+                      <td style={{ padding: '8px 6px', whiteSpace: 'nowrap' }}>{(badges.get(r.name) ?? []).map((a) => a.emoji).join(' ')}</td>
+                    )}
                   </tr>
                 ))}
               </tbody>

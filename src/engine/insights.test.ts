@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { awards, avgGameMs, etaText, queueEta, rivalryFor, streakCall } from './insights'
+import { awards, awardsByName, avgGameMs, etaText, queueEta, rivalryFor, streakCall } from './insights'
 import { addPlayer, createSession, finishMatch, toggleCourtTag } from './session'
 import { countMatches, pairKey, standings } from './stats'
 import { previewQueue } from './queue'
@@ -409,5 +409,20 @@ describe('award ties are shown in full', () => {
     expect(iron.tied).toBe(3)
     for (const n of ['Josh & Daria', 'Stee & Kp', 'Ann & Bo']) expect(iron.winner).toContain(n)
     expect(iron.detail).toMatch(/^3-way tie/)
+  })
+})
+
+describe('awardsByName', () => {
+  it('maps each award to the people who hold it, for the standings badges', () => {
+    const s = createSession('t', { courts: 1 }, names(6))
+    const [a, b, c, d, e, f] = ids(s)
+    s.matches = [
+      game(s, 0, [a, b], [c, d], 11, 5, 600_000),
+      game(s, 1, [a, e], [f, b], 11, 5, 900_000),
+      game(s, 2, [a, c], [e, f], 11, 5, 600_000),
+    ]
+    const by = awardsByName(s)
+    expect(by.get('P1')?.some((x) => x.id === 'iron')).toBe(true)
+    expect(by.get('P4')?.some((x) => x.id === 'iron') ?? false).toBe(false)
   })
 })
