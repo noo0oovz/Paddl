@@ -18,35 +18,35 @@ export default function Standings({ s }: { s: Session }) {
       <h1 className="mb-3 text-xl font-extrabold">Standings</h1>
       {!played && <p className="mb-3 text-sm text-slate-500">Standings appear after the first game is recorded.</p>}
       <div className="card overflow-x-auto">
-        <table className="w-full min-w-[420px] text-sm">
+        <table className="w-full min-w-0 text-sm">
           <thead>
             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800">
-              <th className="px-3 py-2.5">#</th>
-              <th className="px-2 py-2.5">Player</th>
-              <th className="px-2 py-2.5 text-right">W</th>
-              <th className="px-2 py-2.5 text-right">L</th>
-              <th className="px-2 py-2.5 text-right">Win %</th>
-              <th className="px-2 py-2.5 text-right">{scored ? '+/−' : 'Awards'}</th>
-              <th className="px-3 py-2.5 text-right">GP</th>
+              <th className="px-2 sm:px-3 py-2.5">#</th>
+              <th className="w-full px-1.5 sm:px-2 py-2.5">Player</th>
+              <th className="px-1.5 sm:px-1.5 sm:px-2 py-2.5 text-right whitespace-nowrap">W</th>
+              <th className="px-1.5 sm:px-1.5 sm:px-2 py-2.5 text-right whitespace-nowrap">L</th>
+              <th className="px-1.5 sm:px-1.5 sm:px-2 py-2.5 text-right whitespace-nowrap">Win %</th>
+              <th className="px-1.5 sm:px-1.5 sm:px-2 py-2.5 text-right whitespace-nowrap">{scored ? '+/−' : 'Awards'}</th>
+              <th className="px-2 sm:px-3 py-2.5 text-right whitespace-nowrap">GP</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                <td className="px-3 py-2.5 font-bold">{played ? medal(i) : '–'}</td>
-                <td className="max-w-[9rem] truncate px-2 py-2.5 font-semibold">
+                <td className="px-2 sm:px-3 py-2.5 font-bold">{played ? medal(i) : '–'}</td>
+                <td className="max-w-[6rem] sm:max-w-[9rem] truncate px-1.5 sm:px-2 py-2.5 font-semibold">
                   {r.name}
                   {r.status !== 'active' && <span className="ml-1 text-xs font-normal text-slate-400">({r.status === 'resting' ? 'break' : 'left'})</span>}
                 </td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.wins}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.losses}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.wins + r.losses ? Math.round(r.winPct * 100) : '–'}</td>
+                <td className="px-1.5 sm:px-2 py-2.5 text-right tabular-nums">{r.wins}</td>
+                <td className="px-1.5 sm:px-2 py-2.5 text-right tabular-nums">{r.losses}</td>
+                <td className="px-1.5 sm:px-2 py-2.5 text-right tabular-nums">{r.wins + r.losses ? Math.round(r.winPct * 100) : '–'}</td>
                 {scored ? (
                   <td className={`px-2 py-2.5 text-right tabular-nums ${r.diff > 0 ? 'text-green-600' : r.diff < 0 ? 'text-red-600' : ''}`}>{r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}</td>
                 ) : (
-                  <td className="px-2 py-2.5 text-right whitespace-nowrap">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
+                  <td className="px-1.5 sm:px-1.5 sm:px-2 py-2.5 text-right whitespace-nowrap">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
                 )}
-                <td className="px-3 py-2.5 text-right tabular-nums">{r.played}</td>
+                <td className="px-2 sm:px-3 py-2.5 text-right tabular-nums">{r.played}</td>
               </tr>
             ))}
           </tbody>
