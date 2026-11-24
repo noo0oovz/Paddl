@@ -86,7 +86,6 @@ export default function Live({ s }: { s: Session }) {
   const upcoming = previewQueue(s, 4)
   const eta = queueEta(s, now)
   const resting = s.players.filter((p) => p.status === 'resting')
-  const winners = s.config.mode === 'winners'
   const freeCourts = s.courts.filter((c) => !c.match).length
 
   const court = s.courts.find((c) => c.id === scoring)
@@ -109,7 +108,6 @@ export default function Live({ s }: { s: Session }) {
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-4">
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
-          <NextMatch speaking={speakingId === 'next'} onAnnounce={(text) => announce('next', text)} onVoice={() => setVoiceOpen(true)} s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
               <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side) => { const gid = c.match?.gid; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
@@ -122,39 +120,21 @@ export default function Live({ s }: { s: Session }) {
             </button>
             <span className="text-xs text-slate-400">To remove one, tap its <Settings2 size={12} className="inline" /> icon.</span>
           </div>
+          <NextMatch speaking={speakingId === 'next'} onAnnounce={(text) => announce('next', text)} onVoice={() => setVoiceOpen(true)} s={s} eta={eta} upcoming={upcoming} freeCourts={freeCourts} waiting={waitingPlayers} need={need} onPick={setWaitFor} onSwap={swapNext} onRemix={() => remix(remixNext, 'Next match')} />
         </div>
 
         <aside className="min-w-0 space-y-4">
           <section className="card p-4">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="font-bold">Up next</h2>
+              <h2 className="font-bold">Waiting line</h2>
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800">{waitingPlayers} waiting</span>
             </div>
-            {upcoming.length === 0 ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {waitingPlayers === 0 ? 'Everyone is on court.' : winners ? 'Waiting for a challenger.' : `Need ${Math.max(0, need * (s.config.format === 'teams' ? 1 : 1) - waiting.length)} more ${s.config.format === 'teams' ? 'teams' : 'players'} for the next game.`}
-              </p>
-            ) : (
-              <ol className="space-y-2">
-                {upcoming.map((m, i) => (
-                  <li key={i} className="rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800">
-                    <div className="mb-1 text-xs font-semibold text-slate-500">{i === 0 ? (freeCourts ? 'Going on now' : 'Next') : `Then #${i + 1}`}</div>
-                    <div className="font-semibold">{join(m.a.map((id) => nameOf(s, id)))}</div>
-                    {m.b ? (
-                      <>
-                        <div className="text-xs text-slate-400">vs</div>
-                        <div className="font-semibold">{join(m.b.map((id) => nameOf(s, id)))}</div>
-                      </>
-                    ) : (
-                      <div className="text-xs text-slate-500">challenge the winners</div>
-                    )}
-                  </li>
-                ))}
-              </ol>
+            {waiting.length === 0 && (
+              <p className="text-sm text-slate-500 dark:text-slate-400">Everyone is on court.</p>
             )}
             {waiting.length > 0 && (
-              <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
-                <div className="mb-1.5 text-xs font-semibold text-slate-500">Waiting line: games played · when you are up (tap a name to move)</div>
+              <div>
+                <div className="mb-1.5 text-xs font-semibold text-slate-500">Games played · when you are up (tap a name to move)</div>
                 <div className="flex flex-wrap gap-1.5">
                   {waiting.map((u) => (
                     <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
