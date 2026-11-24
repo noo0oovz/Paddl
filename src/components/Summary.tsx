@@ -46,37 +46,63 @@ function Frame({ s, title, children }: { s: Session; title: string; children: Re
   )
 }
 
-/** "Spotify Wrapped"-style recap: the champion, then playful awards. Always light, fixed width, for sharing. */
+/** Session recap picture: podium, the headline numbers, then the awards. Always light, fixed width, for sharing. */
 export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function RecapCard({ s }, ref) {
   const rows = standings(s)
   const list = awards(s)
   const sum = summarize(s)
-  const champ = rows[0] && rows[0].wins > 0 ? rows[0] : null
+  const top = rows.slice(0, 3).filter((r) => r.wins > 0)
+  const order = [top[1], top[0], top[2]]
+  const place = [1, 0, 2]
+  const heights = [74, 106, 56]
+  const tiles: [string, string, string][] = [
+    ['🎾', String(sum.matches), 'GAMES'],
+    ['👥', String(s.players.length), 'PLAYERS'],
+    ['⏱', fmtDuration(sum.durationMs), 'SESSION'],
+    ['🔥', sum.hotStreak ? String(sum.hotStreak.longestStreak) : '–', 'BEST STREAK'],
+  ]
   return (
     <div ref={ref} style={{ width: 720, background: '#ffffff', color: C.ink, fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' }}>
-      <div style={{ background: HEADER_BG, color: '#fff', padding: '30px 32px 26px', borderBottom: `3px solid ${C.lime}` }}>
+      <div style={{ background: HEADER_BG, color: '#fff', padding: '28px 32px 24px', borderBottom: `3px solid ${C.lime}` }}>
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 2.5, color: C.lime }}>PADDL · SESSION RECAP</div>
         <div style={{ fontSize: 36, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
-        <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
-          {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
-        </div>
-        {champ && (
-          <div style={{ marginTop: 18, background: 'rgba(182,255,59,0.12)', border: '1px solid rgba(182,255,59,0.35)', borderRadius: 16, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{ fontSize: 44 }}>🏆</div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, opacity: 0.85 }}>TOP OF THE LADDER</div>
-              <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1.1 }}>{champ.name}</div>
-              <div style={{ fontSize: 14, opacity: 0.9 }}>{champ.wins} {champ.wins === 1 ? 'win' : 'wins'} · {champ.losses} {champ.losses === 1 ? 'loss' : 'losses'}</div>
-            </div>
+        <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>{fmtDate(s.createdAt)}</div>
+      </div>
+
+      <div style={{ padding: '24px 32px 0' }}>
+        {top.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, alignItems: 'end', borderBottom: `3px solid ${C.lime}`, background: 'linear-gradient(180deg, rgba(182,255,59,0.14), rgba(182,255,59,0))', borderRadius: '16px 16px 0 0', padding: '16px 10px 0' }}>
+            {order.map((p, col) => {
+              if (!p) return <div key={col} />
+              const i = place[col]
+              return (
+                <div key={p.id} style={{ textAlign: 'center', minWidth: 0 }}>
+                  <div style={{ fontSize: i === 0 ? 40 : 32, lineHeight: 1.1 }}>{i === 0 ? '👑' : i === 1 ? '🥈' : '🥉'}</div>
+                  <div style={{ fontSize: i === 0 ? 20 : 16, fontWeight: 800, marginTop: 4, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{p.name}</div>
+                  <div style={{ fontSize: 13, color: C.mute, margin: '2px 0 8px', fontWeight: 600 }}>{p.wins}W · {p.losses}L</div>
+                  <div style={{ height: heights[col], borderRadius: '14px 14px 0 0', border: `1px solid ${i === 0 ? 'rgba(120,190,20,0.5)' : C.line}`, borderBottom: 'none', background: i === 0 ? 'linear-gradient(180deg, rgba(182,255,59,0.4), rgba(182,255,59,0.08))' : C.soft, color: i === 0 ? C.green : C.mute, fontSize: 26, fontWeight: 900, paddingTop: 8 }}>{i + 1}</div>
+                </div>
+              )
+            })}
           </div>
         )}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 12 }}>
+          {tiles.map(([e, v, l]) => (
+            <div key={l} style={{ background: C.soft, borderRadius: 14, padding: '12px 6px', textAlign: 'center' }}>
+              <div style={{ fontSize: 20, lineHeight: 1.2 }}>{e}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, lineHeight: 1.2 }}>{v}</div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.4, color: C.mute, marginTop: 2 }}>{l}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={{ padding: '22px 32px 6px' }}>
+        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2, color: C.mute, marginBottom: 10 }}>SESSION AWARDS</div>
         {list.length === 0 && <div style={{ color: C.mute, fontSize: 15, padding: '8px 0 16px' }}>Play a few games and the awards will show up here.</div>}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {list.map((a) => (
-            <div key={a.id} style={{ background: C.soft, borderRadius: 16, padding: '14px 16px', minWidth: 0 }}>
+          {list.map((a, i) => (
+            <div key={a.id} style={{ background: C.soft, borderRadius: 16, padding: '14px 16px', minWidth: 0, gridColumn: list.length % 2 === 1 && i === list.length - 1 ? '1 / -1' : undefined }}>
               <div style={{ fontSize: 28, lineHeight: 1 }}>{a.emoji}</div>
               <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: C.mute, marginTop: 8 }}>{a.title.toUpperCase()}</div>
               <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2, lineHeight: 1.2, overflowWrap: 'anywhere' }}>{a.winner}</div>
