@@ -73,7 +73,7 @@ export function StatStrip({ s }: { s: Session }) {
         <div key={l} className="card px-2 py-3 text-center">
           <div className="flex h-5 items-center justify-center text-lg leading-none">{e}</div>
           <div className="mt-1 text-lg font-black tabular-nums leading-tight">{v}</div>
-          <div className="text-[10px] font-bold tracking-widest text-slate-500 uppercase dark:text-slate-400">{l}</div>
+          <div className="text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">{l}</div>
         </div>
       ))}
     </div>
@@ -109,7 +109,7 @@ export function StandingsSection({ s }: { s: Session }) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-0 text-sm">
           <thead>
-            <tr className="text-left text-[10px] font-bold tracking-widest text-slate-500 uppercase dark:text-slate-400">
+            <tr className="text-left text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">
               <th className="px-2 py-2 sm:px-4">#</th>
               <th className="w-full px-2 py-2">Player</th>
               <th className="px-2 py-2 text-right whitespace-nowrap">W</th>
@@ -207,7 +207,7 @@ export function Highlights({ s }: { s: Session }) {
         <div key={it.label} className="card flex items-center gap-3 px-3 py-2.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent/15 text-brand">{it.icon}</span>
           <span className="min-w-0">
-            <span className="block text-[10px] font-bold tracking-widest text-slate-500 uppercase dark:text-slate-400">{it.label}</span>
+            <span className="block text-xs font-bold tracking-wider text-slate-500 uppercase dark:text-slate-400">{it.label}</span>
             <span className="block truncate text-sm font-black">{it.value}</span>
             <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{it.sub}</span>
           </span>

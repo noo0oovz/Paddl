@@ -77,7 +77,7 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
         <button className="mb-2 px-2 text-left" onClick={() => openSession(null)} title="All sessions">
           <div className="text-xl font-black tracking-tight text-brand">PADDL</div>
           <div className="truncate text-xs text-slate-500">{s.name}</div>
-          <div className="text-[11px] text-slate-400">{MODE_INFO[s.config.mode].label}</div>
+          <div className="text-xs text-slate-400">{MODE_INFO[s.config.mode].label}</div>
         </button>
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)} className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold ${tab === t.id ? 'bg-accent text-accent-ink shadow-[0_6px_20px_-8px_rgba(182,255,59,0.7)]' : 'text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10'}`}>
@@ -100,7 +100,7 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/75 px-4 py-2 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/70">
           <button className="min-w-0 text-left" onClick={() => openSession(null)}>
             <div className="truncate text-base font-extrabold leading-tight">{s.name}</div>
-            <div className="truncate text-[11px] text-slate-500">{MODE_INFO[s.config.mode].label}</div>
+            <div className="truncate text-xs text-slate-500">{MODE_INFO[s.config.mode].label}</div>
           </button>
           <div className="flex shrink-0 items-center gap-1.5">
             <UndoButton />
@@ -134,11 +134,12 @@ function Home({ onNew, onHelp, onData, onInstall }: { onNew: () => void; onHelp:
   const { sessions } = useData()
   const live = sessions.filter((s) => !s.endedAt)
   const past = sessions.filter((s) => s.endedAt)
+  const [resume, ...otherLive] = live
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-16">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex gap-2">
-          <button className="btn-soft !min-h-10" onClick={onHelp}><HelpCircle size={18} /> How to use</button>
+          <button className="btn-soft !min-h-10 whitespace-nowrap" onClick={onHelp} aria-label="How to use" title="How to use"><HelpCircle size={18} /> <span className="hidden min-[430px]:inline">How to use</span></button>
           <button className="btn-soft !min-h-10" onClick={onData} aria-label="Backup and restore" title="Backup and restore"><HardDriveDownload size={18} /></button>
         </div>
         <ThemeSwitch />
@@ -149,20 +150,32 @@ function Home({ onNew, onHelp, onData, onInstall }: { onNew: () => void; onHelp:
           {damagedAtStartup} saved {damagedAtStartup === 1 ? 'session was' : 'sessions were'} damaged and set aside so Paddl could open. Nothing else was lost.
         </div>
       )}
+      {resume && (
+        <section className="card mt-3 border-accent/40 p-4">
+          <h2 className="label">Pick up where you left off</h2>
+          <button className="flex w-full items-center gap-3 text-left" onClick={() => openSession(resume.id)}>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-lg font-black">{resume.name}</span>
+              <span className="block text-sm text-slate-500 dark:text-slate-400">{resume.players.length} players · {resume.matches.length} {resume.matches.length === 1 ? 'game' : 'games'} played · {MODE_INFO[resume.config.mode].label}</span>
+            </span>
+            <span className="btn-primary !min-h-12 shrink-0 px-5">Resume</span>
+          </button>
+        </section>
+      )}
       <section className="card relative mt-3 overflow-hidden px-5 pt-8 pb-7 text-center">
         <CourtLines className="pointer-events-none absolute inset-x-6 bottom-0 h-24 w-[calc(100%-3rem)] text-slate-400/20 [mask-image:linear-gradient(to_top,#000,transparent)] dark:text-accent/15" />
         <div className="relative">
           <div className="mx-auto w-fit"><Logo size={84} /></div>
           <h1 className="mt-3 text-5xl font-black tracking-tight drop-shadow-[0_2px_12px_var(--bg)]">PADDL</h1>
           <p className="mx-auto mt-2 max-w-xs text-sm text-slate-600 dark:text-slate-300">Fair pickleball queues for open play.<br />No sign-up. Works offline.</p>
-          <button className="btn-primary mt-6 w-full !min-h-14 text-base" onClick={onNew}><Plus size={22} /> New session</button>
+          <button className={`${resume ? 'btn-soft' : 'btn-primary'} mt-6 w-full !min-h-14 text-base`} onClick={onNew}><Plus size={22} /> New session</button>
         </div>
       </section>
 
-      {live.length > 0 && (
+      {otherLive.length > 0 && (
         <section className="mt-8">
-          <h2 className="label">🟢 In progress</h2>
-          <div className="space-y-2">{live.map((s) => <Row key={s.id} s={s} live />)}</div>
+          <h2 className="label">🟢 Also in progress</h2>
+          <div className="space-y-2">{otherLive.map((s) => <Row key={s.id} s={s} live />)}</div>
         </section>
       )}
       {past.length > 0 && (

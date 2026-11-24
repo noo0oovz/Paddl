@@ -15,8 +15,8 @@
   --color-slate-100: #eef2f9;
   --color-slate-200: #dde4f0;
   --color-slate-300: #c3cde0;
-  --color-slate-400: #8a97b1;
-  --color-slate-500: #5f6d89;
+  --color-slate-400: #6b7893;
+  --color-slate-500: #4f5c78;
   --color-slate-600: #475270;
   --color-slate-700: #2a3350;
   --color-slate-800: #161d33;
@@ -87,6 +87,8 @@
   --glass: rgba(16, 22, 40, 0.72);
   --glass-line: rgba(160, 185, 255, 0.13);
   --card-glow: 0 0 0 1px rgba(182, 255, 59, 0.02), 0 12px 36px -14px rgba(0, 0, 0, 0.7);
+  --color-slate-400: #a6b2ca;
+  --color-slate-500: #94a1bb;
 }
 
 html,
@@ -154,7 +156,7 @@ body::before {
   @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white/80 px-3 text-base outline-none focus:border-green-700 focus:ring-2 focus:ring-accent/40 dark:border-white/15 dark:bg-white/5 dark:focus:border-accent;
 }
 @utility label {
-  @apply mb-1.5 block text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400;
+  @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400;
 }
 /* Lime-on-light text must be the dark lime to stay readable; on dark surfaces use the bright one. */
 @utility text-brand {
@@ -210,10 +212,42 @@ body::before {
   animation: paddl-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
+/* A new game starting on a court: the card slides in (paddl-in) and its edge flashes lime once. */
+@keyframes court-flash {
+  0% {
+    box-shadow: 0 0 0 2px rgba(182, 255, 59, 0.9), 0 0 36px -4px rgba(182, 255, 59, 0.7);
+  }
+  100% {
+    box-shadow: var(--card-glow);
+  }
+}
+
+/* The call-out button breathes while it is speaking. */
+@keyframes speak-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(182, 255, 59, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(182, 255, 59, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .court-new {
+    animation: paddl-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), court-flash 1.1s ease-out;
+  }
+  .speaking-pulse {
+    animation: speak-pulse 1.4s ease-in-out infinite;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .paddl-in,
   .sheet-in,
-  .live-dot {
+  .live-dot,
+  .court-new,
+  .speaking-pulse {
     animation: none;
   }
 }

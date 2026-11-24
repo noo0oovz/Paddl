@@ -21,8 +21,8 @@ export default function UndoButton({ full = false }: { full?: boolean }) {
 export function SaveStatus({ className = '' }: { className?: string }) {
   const { saved } = useData()
   return saved === 'ok' ? (
-    <span className={`text-[11px] text-slate-400 ${className}`} title="Every change is saved on this device. It works offline.">● Saved on this device</span>
+    <span className={`text-xs text-slate-400 ${className}`} title="Every change is saved on this device. It works offline.">● Saved on this device</span>
   ) : (
-    <span className={`text-[11px] font-semibold text-red-600 ${className}`} role="alert">⚠ Could not save. Storage is full or blocked</span>
+    <span className={`text-xs font-semibold text-red-600 ${className}`} role="alert">⚠ Could not save. Storage is full or blocked</span>
   )
 }

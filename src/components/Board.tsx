@@ -13,6 +13,7 @@ import { CourtLines, PaddleBall } from './art'
 import VoiceSheet from './VoiceSheet'
 import { courtCall, upNextCall } from '../lib/announce'
 import { useAnnouncer } from '../lib/useAnnouncer'
+import { TIME_MARK_MIN } from '../lib/cues'
 
 /**
  * Big-screen scoreboard and queue board: high contrast, large type. Prop a tablet near the courts or cast the tab
@@ -102,7 +103,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         </div>
 
         {s.courts.some((c) => c.match) && (
-          <p className="mb-3 text-sm font-semibold text-slate-400">👆 Tap the winning team to record the result and start the next match.</p>
+          <p className="mb-3 text-sm font-semibold text-slate-300">👆 Tap the winning team to record the result and start the next match.</p>
         )}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -111,10 +112,14 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
               const m = c.match
               const call = streakCall(s, c.id)
               const riv = m ? rivalryFor(s, m.a, m.b) : null
+              const mins = m ? Math.max(0, now - m.startedAt) / 60000 : 0
+              const pct = m ? Math.min(100, (mins / TIME_MARK_MIN) * 100) : 100
+              const barColor = !m ? 'bg-slate-700' : mins >= TIME_MARK_MIN ? 'bg-red-600' : mins >= 10 ? 'bg-amber-400' : 'bg-accent'
               return (
-                <section key={`${c.id}:${m ? m.startedAt : 'idle'}`} className="paddl-in relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md">
+                <section key={`${c.id}:${m ? m.startedAt : 'idle'}`} className="paddl-in court-new relative flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-md">
                   <div className="relative flex items-center justify-between border-b border-white/10 px-5 py-3">
-                    <span aria-hidden className={`absolute inset-x-0 top-0 h-1 ${m ? 'bg-accent shadow-[0_0_18px_rgba(182,255,59,0.9)]' : 'bg-slate-700'}`} />
+                    <span aria-hidden className="absolute inset-x-0 top-0 h-1.5 bg-white/10" />
+                    <span aria-hidden title={m ? `${Math.floor(mins)} min on court` : undefined} className={`absolute top-0 left-0 h-1.5 transition-[width] duration-1000 ${barColor}`} style={{ width: `${pct}%` }} />
                     <h2 className="flex items-center gap-2 text-2xl font-black tracking-tight sm:text-3xl"><PaddleBall size={30} glow={false} /> {c.name}</h2>
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
                       {c.tags?.map((t) => <span key={t} className="rounded-full bg-white/10 px-2.5 py-1">{COURT_TAGS[t].emoji} {COURT_TAGS[t].label}</span>)}
@@ -130,7 +135,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                         onClick={() => announce(c.id, courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
                         aria-label={speakingId === c.id ? `Stop announcing ${c.name}` : `Call out ${c.name}`}
                         aria-pressed={speakingId === c.id}
-                        className={`btn border border-white/10 bg-white/5 text-white hover:bg-white/10 ${speakingId === c.id ? '!border-accent !bg-accent/15 !text-accent' : ''}`}
+                        className={`btn border border-white/10 bg-white/5 text-white hover:bg-white/10 ${speakingId === c.id ? 'speaking-pulse !border-accent !bg-accent/15 !text-accent' : ''}`}
                       >
                         <Volume2 size={20} /> {speakingId === c.id ? 'Calling out… tap to stop' : 'Call out this court'}
                       </button>
@@ -157,7 +162,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                     onClick={() => announce('next', upNextCall(upcoming[0].a.map((id) => nameOf(s, id)), upcoming[0].b ? upcoming[0].b.map((id) => nameOf(s, id)) : null))}
                     aria-label={speakingId === 'next' ? 'Stop announcing the next match' : 'Call out the next match'}
                     aria-pressed={speakingId === 'next'}
-                    className={`btn border border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20 ${speakingId === 'next' ? '!border-accent !bg-accent/15 !text-accent' : ''}`}
+                    className={`btn border border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20 ${speakingId === 'next' ? 'speaking-pulse !border-accent !bg-accent/15 !text-accent' : ''}`}
                   >
                     <Volume2 size={20} /> {speakingId === 'next' ? 'Stop' : 'Call out'}
                   </button>

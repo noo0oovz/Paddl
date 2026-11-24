@@ -46,7 +46,7 @@ export function Segmented<T extends string | number>({
           }`}
         >
           {o.label}
-          {o.sub && <span className={`block text-[11px] font-normal ${o.value === value ? 'text-accent-ink/75' : 'text-slate-500'}`}>{o.sub}</span>}
+          {o.sub && <span className={`block text-xs font-normal ${o.value === value ? 'text-accent-ink/75' : 'text-slate-500'}`}>{o.sub}</span>}
         </button>
       ))}
     </div>

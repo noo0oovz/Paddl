@@ -231,7 +231,6 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
   const refs = useRef<Record<Part, HTMLDivElement | null>>({ standings: null, participation: null, history: null })
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
-  const sum = summarize(s)
   const recapAwards: Award[] = awards(s)
 
   async function makeOne(part: Part): Promise<Blob> {
@@ -312,7 +311,6 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
   const rows = standings(s)
   const [preview, setPreview] = useState(false)
   const { ask, dialog } = useConfirm()
-  const champ = rows[0] && rows[0].wins > 0 ? rows[0] : null
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pt-4 pb-10">
@@ -325,10 +323,9 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       <header className="card relative overflow-hidden px-5 pt-6 pb-5">
         <CourtLines className="pointer-events-none absolute -right-24 -top-10 w-60 text-slate-400/10 [mask-image:linear-gradient(to_left,#000,transparent_85%)] dark:text-accent/[0.08]" />
         <div className="relative">
-          <div className="flex items-center gap-2 text-[11px] font-black tracking-[0.25em] text-brand"><span className="live-dot" /> FINAL RESULTS</div>
+          <div className="flex items-center gap-2 text-xs font-black tracking-[0.25em] text-brand"><span className="live-dot" /> FINAL RESULTS</div>
           <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">{s.name}</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}</p>
-          {champ && <p className="mt-3 text-sm font-semibold">👑 <span className="font-black">{champ.name}</span> takes the night with {champ.wins} {champ.wins === 1 ? 'win' : 'wins'}.</p>}
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{fmtDate(s.createdAt)}</p>
         </div>
       </header>
 
@@ -344,7 +341,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
                 <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-accent/70" />
                 <div className="pl-1 text-3xl leading-none">{a.emoji}</div>
                 <div className="min-w-0">
-                  <div className="text-[10px] font-black tracking-widest text-slate-500 uppercase dark:text-slate-400">{a.title}</div>
+                  <div className="text-xs font-black tracking-wider text-slate-500 uppercase dark:text-slate-400">{a.title}</div>
                   <div className="font-black break-words">{a.winner}</div>
                   <div className="text-sm text-slate-500 dark:text-slate-400">{a.detail}</div>
                 </div>
