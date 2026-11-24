@@ -107,31 +107,31 @@ export function StandingsSection({ s }: { s: Session }) {
   return (
     <Section emoji="🏆" title="Final standings" hint={scored ? 'Ranked by win rate, then point difference' : 'Ranked by win rate'}>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[340px] text-sm">
+        <table className="w-full min-w-0 text-sm">
           <thead>
             <tr className="text-left text-[10px] font-bold tracking-widest text-slate-500 uppercase dark:text-slate-400">
-              <th className="px-4 py-2">#</th>
+              <th className="px-2 py-2 sm:px-4">#</th>
               <th className="w-full px-2 py-2">Player</th>
               <th className="px-2 py-2 text-right whitespace-nowrap">W</th>
               <th className="px-2 py-2 text-right whitespace-nowrap">L</th>
               <th className="px-2 py-2 text-right whitespace-nowrap">Win %</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">{scored ? '+/−' : 'Awards'}</th>
+              <th className="px-2 py-2 text-right whitespace-nowrap sm:px-4">{scored ? '+/−' : 'Awards'}</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className={`border-t border-slate-100 dark:border-white/5 ${i === 0 && r.wins > 0 ? 'bg-accent/10' : ''}`}>
-                <td className="px-4 py-2.5 font-black">{medal(i)}</td>
-                <td className="max-w-[9rem] truncate px-2 py-2.5 font-bold">{r.name}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.wins}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.losses}</td>
-                <td className="px-2 py-2.5 text-right tabular-nums">{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
+                <td className="px-2 py-2.5 font-black sm:px-4">{medal(i)}</td>
+                <td className="max-w-[6rem] truncate px-1.5 py-2.5 font-bold sm:max-w-[9rem] sm:px-2">{r.name}</td>
+                <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.wins}</td>
+                <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.losses}</td>
+                <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.wins + r.losses ? `${Math.round(r.winPct * 100)}%` : '–'}</td>
                 {scored ? (
-                  <td className={`px-4 py-2.5 text-right tabular-nums font-semibold ${r.diff > 0 ? 'text-brand' : r.diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                  <td className={`px-2 sm:px-4 py-2.5 text-right tabular-nums font-semibold ${r.diff > 0 ? 'text-brand' : r.diff < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                     {r.pf + r.pa ? (r.diff > 0 ? `+${r.diff}` : r.diff) : '–'}
                   </td>
                 ) : (
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
+                  <td className="px-2 py-2.5 text-right whitespace-nowrap sm:px-4">{(badges.get(r.name) ?? []).map((a) => <span key={a.id} title={a.title} aria-label={a.title} className="ml-0.5">{a.emoji}</span>)}</td>
                 )}
               </tr>
             ))}

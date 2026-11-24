@@ -13,7 +13,7 @@ function read(): ThemePref {
   } catch {
     /* storage unavailable */
   }
-  return 'system'
+  return 'dark' // night mode unless the user picks otherwise
 }
 
 let pref: ThemePref = read()

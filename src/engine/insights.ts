@@ -205,6 +205,11 @@ export function awards(s: Session): Award[] {
   const byId = new Map<string, PlayerStat>(players.map((r) => [r.id, r]))
   /** The display name for a side of a game: the team in Fixed teams, otherwise the players. */
   const sideName = (ids: string[]) => ids.map((id) => byId.get(id)?.name ?? '?').join(' & ')
+  /** A team named the same way as its standings row (the team's own player order), so badges find the row. */
+  const teamName = (ids: string[]) => {
+    const team = s.teams.find((t) => t.playerIds.length === ids.length && t.playerIds.every((id) => ids.includes(id)))
+    return sideName(team ? team.playerIds : ids)
+  }
 
   // Iron Man / Iron Woman: most games, then most time on court. Needs a real lead (at least 2 games played).
   const maxPlayed = Math.max(...rows.map((r) => r.played))
@@ -232,7 +237,7 @@ export function awards(s: Session): Award[] {
     const best = Math.max(...clutch.values())
     const ids = [...clutch].filter(([, n]) => n === best).map(([id]) => id)
     const g = shared(
-      ids.map((id) => (teams ? sideName(id.split('+')) : byId.get(id)?.name ?? '?')),
+      ids.map((id) => (teams ? teamName(id.split('+')) : byId.get(id)?.name ?? '?')),
       rows.length,
       `${best} ${best === 1 ? 'win' : 'wins'} by 2 points or less`,
     )
