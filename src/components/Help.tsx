@@ -70,7 +70,7 @@ export default function Help({ onClose, onTour, onInstall }: { onClose: () => vo
         </Topic>
 
         <Topic emoji="🏆" title="Results and sharing">
-          <p>After <b>End</b>, <b>Save images</b> makes three pictures: final standings, games played with minutes, and match history. <b>Save recap card</b> makes a fun awards card for the group chat.</p>
+          <p>After <b>End</b>, <b>Save images</b> makes four pictures: final standings, games played with minutes, match history, and an awards card with the podium for the group chat.</p>
         </Topic>
 
         <Topic emoji="📲" title="Add Paddl to your home screen">
