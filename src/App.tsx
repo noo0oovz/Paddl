@@ -16,6 +16,7 @@ import DataSheet from './components/DataSheet'
 import InstallGuide from './components/InstallGuide'
 import { currentEnv } from './lib/install'
 import UpdateBanner from './components/UpdateBanner'
+import SaveWarning from './components/SaveWarning'
 import { useConfirm } from './components/Confirm'
 import MoreMenu from './components/MoreMenu'
 import Tour, { tourSeen } from './components/Tour'
@@ -48,6 +49,7 @@ export default function App() {
       {data && <DataSheet onClose={() => setData(false)} />}
       {install && <InstallGuide onClose={() => setInstall(false)} />}
       <UpdateBanner />
+      <SaveWarning />
       {tour && <Tour onDone={() => setTour(false)} />}
     </>
   )
