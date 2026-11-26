@@ -55,7 +55,8 @@ export default function Help({ onClose, onTour, onInstall }: { onClose: () => vo
           <p>In the <b>Next match</b> box, the swap icon beside a name sends that player to the back and brings the next person in.</p>
           <p>Nobody extra waiting? Then there is no one to swap in yet: tap a name to make someone play next, or pull a player in.</p>
           <p>To add or remove a court, use <b>Add court</b> under the courts, or tap a court's settings icon to remove it.</p>
-          <p><b>Remix</b> redraws the next match, or a game already on court, with new partners and opponents. Use it if matches feel repetitive.</p>
+          <p><b>Redraw next</b> picks different partners and opponents for the next match from the people already waiting. If everyone waiting has to play, nothing can change.</p>
+          <p><b>Reshuffle</b> (on a court) sends the four on that court back to the line and picks a different four. This is the one that really mixes people up, so use it if matches feel repetitive.</p>
           <p>Tap a name in the <b>Waiting line</b> to make them play next, send them to the back, or pull them into a game right now.</p>
         </Topic>
 

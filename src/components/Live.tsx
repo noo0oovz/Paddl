@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, Megaphone, Settings2, Trash2, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Trophy, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
+import { ArrowDownToLine, Megaphone, Settings2, Trash2, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Trophy, Undo2, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
 import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, playedOf, nameOf } from '../engine/stats'
@@ -13,7 +13,7 @@ import {
   setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
-import { updateActive } from '../store'
+import { undo, updateActive } from '../store'
 import { elapsed, join, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
@@ -29,6 +29,10 @@ export default function Live({ s }: { s: Session }) {
   const [subFor, setSubFor] = useState<{ court: string; id: string } | null>(null)
   const [waitFor, setWaitFor] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The toast offered after a result is recorded, so a mis-tap can be taken back right where it happened.
+  const [won, setWon] = useState<{ text: string; id: number } | null>(null)
+  const wonTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [board, setBoard] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   // What each call-out is about: the game on that court (or the upcoming match). It stops if that changes.
@@ -63,15 +67,24 @@ export default function Live({ s }: { s: Session }) {
   }, [now, s.courts])
 
   function flash(msg: string) {
+    if (noteTimer.current) clearTimeout(noteTimer.current)
     setNote(msg)
-    setTimeout(() => setNote(null), 3500)
+    noteTimer.current = setTimeout(() => setNote(null), 3500)
   }
+
+  /** A result was recorded: show who won with an Undo button next to it (the same as on the Board). */
+  function showWon(text: string) {
+    if (wonTimer.current) clearTimeout(wonTimer.current)
+    setWon({ text, id: Date.now() })
+    wonTimer.current = setTimeout(() => setWon(null), 6000)
+  }
+  useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); if (wonTimer.current) clearTimeout(wonTimer.current) }, [])
 
   /** Run a remix; tell the host when no different match-up was possible. */
   function remix(fn: (x: Session) => Session, what: string) {
     const changed = fn(s) !== s
     if (changed) updateActive(fn)
-    flash(changed ? `${what} remixed.` : `No different match-up is possible for ${what.toLowerCase()} with the players waiting. To mix more, use Remix on a court game, or add a player.`)
+    flash(changed ? `${what} redrawn.` : `No different match-up is possible for ${what.toLowerCase()} with the players waiting. To mix more, tap Reshuffle on a court game, or add a player.`)
   }
 
   /** One tap: send a player out of the next match to the back of the line; the next in line steps up. */
@@ -133,7 +146,7 @@ export default function Live({ s }: { s: Session }) {
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
-              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side) => { const gid = c.match?.gid; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) flash('Game recorded. Undo is at the top if that was a mis-tap.') }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side) => { const gid = c.match?.gid; const ids = side === 'a' ? c.match?.a : c.match?.b; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) showWon(`${join((ids ?? []).map((id) => nameOf(s, id)))} won on ${c.name}`) }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
@@ -191,6 +204,13 @@ export default function Live({ s }: { s: Session }) {
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
       {adding && <AddPlayerSheet s={s} onClose={() => setAdding(false)} />}
       {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
+      {won && (
+        <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 bottom-20 z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:bottom-4">
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Trophy size={15} /></span>
+          <span className="min-w-0 flex-1 truncate text-sm font-bold">{won.text}</span>
+          <button className="btn-soft !min-h-9 shrink-0 !px-3 !text-white" onClick={() => { undo(); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
+        </div>
+      )}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
       {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} onNote={flash} />}
       {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
@@ -267,8 +287,8 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
           {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           <div className="mt-3 flex gap-2">
             <button className="btn-soft flex-1 !min-h-9" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
-            <button className="btn-soft flex-1 !min-h-9" onClick={onRemix} title="Remix this game: new partners and opponents" aria-label={`Remix ${c.name}`}>
-              <Shuffle size={16} /> Remix
+            <button className="btn-soft flex-1 !min-h-9" onClick={onRemix} title="Reshuffle this game: the four on court go back to the line and a different four are picked" aria-label={`Remix ${c.name}`}>
+              <Shuffle size={16} /> Reshuffle
             </button>
           </div>
         </div>
@@ -582,8 +602,8 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-slate-500 sm:inline">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
           {next && (
-            <button className="btn-soft !min-h-9 !px-3" onClick={onRemix} title="Re-draw the upcoming matches with different partners and opponents">
-              <Shuffle size={16} /> Remix
+            <button className="btn-soft !min-h-9 !px-3" onClick={onRemix} title="Redraw the next match: different partners and opponents from the people already waiting" aria-label="Redraw next match">
+              <Shuffle size={16} /> Redraw next
             </button>
           )}
         </div>

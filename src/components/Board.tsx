@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Crown, Maximize2, Minimize2, Undo2, Volume2, VolumeX, X } from 'lucide-react'
+import { Check, Crown, Lock, LockOpen, Maximize2, Minimize2, Undo2, Volume2, VolumeX, X } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { COURT_TAGS } from '../engine/types'
 import { previewQueue, waitingUnits } from '../engine/queue'
@@ -24,6 +24,13 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const { undo: undoDepth } = useData()
   const sound = useSound()
   const [full, setFull] = useState(false)
+  // Locked: a bystander or a child cannot record a result by touching the screen. It only lives while the Board is
+  // open, so reloading always starts unlocked and nobody can be shut out of their own session.
+  const [locked, setLocked] = useState(false)
+  const [hold, setHold] = useState(0) // 0-1: how far the press-and-hold to unlock has got
+  const holdRaf = useRef<number | null>(null)
+  const [nudge, setNudge] = useState(false)
+  const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const upcoming = previewQueue(s, 4)
   const contexts: Record<string, string> = Object.fromEntries([
@@ -97,6 +104,12 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
 
   /** Record the win for one side of a court. The court refills from the queue straight away. */
   function win(courtId: string, side: 'a' | 'b') {
+    if (locked) { // say why nothing happened, so it never looks broken
+      setNudge(true)
+      if (nudgeTimer.current) clearTimeout(nudgeTimer.current)
+      nudgeTimer.current = setTimeout(() => setNudge(false), 2500)
+      return
+    }
     const c = s.courts.find((x) => x.id === courtId)
     if (!c?.match) return
     const ids = side === 'a' ? c.match.a : c.match.b
@@ -104,6 +117,24 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     if (!updateActive((x) => finishMatch(x, courtId, { winner: side, scoreA: null, scoreB: null, expect: gid }))) return // an ignored stale tap
     show(`${join(ids.map((id) => nameOf(s, id)))} won on ${c.name}`)
   }
+
+  /** Unlock takes a deliberate press and hold (about a second), so a stray touch cannot undo the lock. */
+  function startHold() {
+    const t0 = performance.now()
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - t0) / 1000)
+      setHold(p)
+      if (p >= 1) { holdRaf.current = null; setLocked(false); setHold(0); return }
+      holdRaf.current = requestAnimationFrame(tick)
+    }
+    holdRaf.current = requestAnimationFrame(tick)
+  }
+  function cancelHold() {
+    if (holdRaf.current) cancelAnimationFrame(holdRaf.current)
+    holdRaf.current = null
+    setHold(0)
+  }
+  useEffect(() => () => { if (holdRaf.current) cancelAnimationFrame(holdRaf.current); if (nudgeTimer.current) clearTimeout(nudgeTimer.current) }, [])
 
   function doUndo() {
     undo()
@@ -126,6 +157,19 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
             <button onClick={() => setSound(!sound)} className={iconBtn} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title="Chimes (the beep when a game starts)">
               {sound ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
+            {locked ? (
+              <button
+                onPointerDown={startHold} onPointerUp={cancelHold} onPointerLeave={cancelHold} onPointerCancel={cancelHold}
+                onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); startHold() } }} onKeyUp={cancelHold}
+                className="btn relative overflow-hidden border border-amber-400/60 bg-amber-400/15 text-amber-200 select-none" style={{ touchAction: 'none' }}
+                aria-label="Locked. Press and hold to unlock" aria-pressed title="Locked: taps on winners are ignored. Press and hold to unlock."
+              >
+                <span aria-hidden className="absolute inset-y-0 left-0 bg-amber-400/40" style={{ width: `${hold * 100}%` }} />
+                <Lock size={20} className="relative" /> <span className="relative">Hold to unlock</span>
+              </button>
+            ) : (
+              <button onClick={() => setLocked(true)} className={iconBtn} aria-label="Lock the board" title="Lock: ignore taps on winners (for a tablet others can touch)"><LockOpen size={20} /> <span className="hidden sm:inline">Lock</span></button>
+            )}
             <button onClick={() => setVoiceOpen(true)} className={iconBtn} aria-label="Announcer voice settings" title="Choose the announcer voice"><Volume2 size={20} /> <span className="hidden sm:inline">Voice</span></button>
             {document.fullscreenEnabled && (
               <button onClick={toggleFull} className={iconBtn} aria-label={full ? 'Exit full screen' : 'Full screen'}>
@@ -137,7 +181,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         </div>
 
         {s.courts.some((c) => c.match) && (
-          <p className="mb-3 text-sm font-semibold text-slate-300">👆 Tap the winning team to record the result and start the next match.</p>
+          <p className={`mb-3 text-sm font-semibold ${locked ? 'text-amber-300' : 'text-slate-300'}`}>{locked ? '🔒 Locked: touching a team does nothing. Press and hold the lock button to unlock.' : '👆 Tap the winning team to record the result and start the next match.'}</p>
         )}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -252,6 +296,11 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
       </div>
 
       {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
+      {nudge && (
+        <div role="status" className="paddl-in fixed inset-x-4 bottom-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-amber-400/50 bg-slate-900/95 px-4 py-3 text-amber-200 backdrop-blur-xl">
+          <Lock size={20} className="shrink-0" /> <span className="text-base font-bold">The board is locked. Press and hold the lock button to unlock it.</span>
+        </div>
+      )}
       {toast && (
         <div key={toast.id} role="status" className="paddl-in fixed inset-x-4 bottom-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-4 py-3 shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Check size={18} /></span>
