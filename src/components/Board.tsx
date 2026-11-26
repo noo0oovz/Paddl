@@ -37,6 +37,40 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const eta = queueEta(s, now)
   const waiting = waitingUnits(s)
 
+  const boardRef = useRef<HTMLDivElement>(null)
+
+  // The page behind the Board is locked while it is open, so a swipe always scrolls the Board.
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prev = { h: html.style.overflow, b: body.style.overflow }
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    return () => { html.style.overflow = prev.h; body.style.overflow = prev.b }
+  }, [])
+
+  // Turning the tablet changes the visible height. Re-measure, and keep the scroll position inside the new range,
+  // so the Board is never left stuck at a position it can no longer scroll from.
+  useEffect(() => {
+    const fix = () => {
+      const el = boardRef.current
+      if (!el) return
+      el.style.height = window.innerHeight + 'px'
+      requestAnimationFrame(() => {
+        el.style.height = '100dvh'
+        el.scrollTop = Math.min(el.scrollTop, Math.max(0, el.scrollHeight - el.clientHeight))
+      })
+    }
+    window.addEventListener('resize', fix)
+    window.addEventListener('orientationchange', fix)
+    window.visualViewport?.addEventListener('resize', fix)
+    return () => {
+      window.removeEventListener('resize', fix)
+      window.removeEventListener('orientationchange', fix)
+      window.visualViewport?.removeEventListener('resize', fix)
+    }
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     const onFs = () => setFull(!!document.fullscreenElement)
@@ -79,7 +113,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const iconBtn = 'btn border border-white/10 bg-white/5 text-white hover:bg-white/10'
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-950 p-4 text-white sm:p-6" role="dialog" aria-label="Court board">
+    <div ref={boardRef} className="board-scroll fixed inset-x-0 top-0 z-[60] overflow-y-auto overscroll-contain bg-slate-950 p-4 text-white sm:p-6" style={{ height: '100dvh', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }} role="dialog" aria-label="Court board">
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(50rem_30rem_at_10%_-10%,rgba(182,255,59,0.12),transparent_60%),radial-gradient(50rem_30rem_at_100%_0%,rgba(34,211,238,0.12),transparent_60%)]" />
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
