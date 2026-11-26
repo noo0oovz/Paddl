@@ -25,6 +25,7 @@ export default function Live({ s }: { s: Session }) {
   const now = useNow()
   const [scoring, setScoring] = useState<string | null>(null)
   const [people, setPeople] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [subFor, setSubFor] = useState<{ court: string; id: string } | null>(null)
   const [waitFor, setWaitFor] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -97,9 +98,9 @@ export default function Live({ s }: { s: Session }) {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-6">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <div className="min-w-0 text-sm text-slate-500 dark:text-slate-400">
-          {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'}<span className="hidden min-[420px]:inline"> played</span> · {s.players.filter((p) => p.status === 'active').length} playing
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-2">
+        <div className="w-full min-w-0 text-sm text-slate-500 sm:w-auto dark:text-slate-400">
+          {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'} played · {s.players.filter((p) => p.status === 'active').length} playing
         </div>
         <div className="flex shrink-0 gap-2">
           <button className="btn-soft !min-h-10 !px-3" onClick={() => setVoiceOpen(true)} aria-label="Announcer voice settings" title="Choose the announcer voice"><Megaphone size={18} /></button>
@@ -107,7 +108,8 @@ export default function Live({ s }: { s: Session }) {
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
           </button>
           <button className="btn-soft !min-h-10" onClick={() => setBoard(true)} title="Big-screen board for a tablet or TV"><Monitor size={18} /> <span className="hidden min-[420px]:inline">Board</span></button>
-          <button className="btn-primary !min-h-10" onClick={() => setPeople(true)}><Users size={18} /> Players</button>
+          <button className="btn-primary !min-h-10" onClick={() => setAdding(true)} aria-label={s.config.format === 'teams' ? 'Add a late team' : 'Add a late player'} title="Someone just arrived? Add them without ending the session"><UserPlus size={18} /> <span className="hidden min-[360px]:inline">{s.config.format === 'teams' ? 'Add team' : 'Add'}</span></button>
+          <button className="btn-soft !min-h-10" onClick={() => setPeople(true)} title="Breaks, renames and who has left"><Users size={18} /> <span className="hidden min-[420px]:inline">Players</span></button>
         </div>
       </div>
 
@@ -187,6 +189,7 @@ export default function Live({ s }: { s: Session }) {
 
       {court?.match && <ScoreSheet s={s} court={court} onClose={() => setScoring(null)} />}
       {people && <PeopleSheet s={s} onClose={() => setPeople(false)} />}
+      {adding && <AddPlayerSheet s={s} onClose={() => setAdding(false)} />}
       {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
       {tagFor && <TagSheet s={s} courtId={tagFor} onClose={() => setTagFor(null)} onNote={flash} />}
@@ -415,6 +418,78 @@ function SubSheet({ s, courtId, outId, onClose }: { s: Session; courtId: string;
     </Sheet>
     {dialog}
     </>
+  )
+}
+
+/** Someone just turned up: add them straight into the line without ending the session. Stays open for the next one. */
+function AddPlayerSheet({ s, onClose }: { s: Session; onClose: () => void }) {
+  const [name, setName] = useState('')
+  const [name2, setName2] = useState('')
+  const [level, setLevelState] = useState(3.5)
+  const [joined, setJoined] = useState<{ id: string; label: string }[]>([])
+  const teams = s.config.format === 'teams'
+  const dupe = !!name.trim() && (nameTaken(s, name) || (teams && (nameTaken(s, name2) || name.trim().toLowerCase() === name2.trim().toLowerCase())))
+  const ready = teams ? !!name.trim() && !!name2.trim() : !!name.trim()
+  const now = useNow()
+  const eta = queueEta(s, now)
+  const first = useRef<HTMLInputElement>(null)
+  useEffect(() => { first.current?.focus() }, [])
+
+  function add() {
+    if (!ready || dupe) return
+    const before = new Set(s.players.map((p) => p.id))
+    const changed = updateActive((x) => (teams ? addTeam(x, { name, level }, { name: name2, level }) : addPlayer(x, name, level)))
+    if (!changed) return
+    setJoined((j) => [...j, { id: 'pending:' + (teams ? name.trim() + ' & ' + name2.trim() : name.trim()), label: teams ? name.trim() + ' & ' + name2.trim() : name.trim() }])
+    void before
+    setName('')
+    setName2('')
+    first.current?.focus()
+  }
+
+  // Where each person who just joined is in the line right now (it changes as games finish).
+  function status(label: string): string {
+    const ids = label.split(' & ').map((n) => s.players.find((p) => p.name.toLowerCase() === n.trim().toLowerCase())?.id).filter(Boolean) as string[]
+    if (!ids.length) return ''
+    if (s.courts.some((c) => c.match && ids.some((id) => [...c.match!.a, ...c.match!.b].includes(id)))) return 'playing now'
+    const t = etaText(eta.get(ids[0]))
+    return t ? t : 'in the waiting line'
+  }
+
+  return (
+    <Sheet title={teams ? 'Add a late team' : 'Add a late player'} onClose={onClose}>
+      <div className="space-y-4">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          {teams ? 'The new team joins the waiting line.' : 'They join the waiting line right away. Games on court are not interrupted.'}
+          {s.config.lateJoinMedian ? ' They start at the average games played, so they are not ahead or behind.' : ''}
+        </p>
+        <div className="flex gap-2">
+          <input ref={first} className="input" placeholder={teams ? 'Player 1' : 'Name'} value={name} maxLength={30} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label={teams ? 'Player 1 name' : 'Name of the new player'} />
+          {teams && <input className="input" placeholder="Player 2" value={name2} maxLength={30} onChange={(e) => setName2(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label="Player 2 name" />}
+        </div>
+        {s.config.mode === 'skill' && (
+          <label className="flex items-center justify-between gap-3 text-sm font-semibold">
+            Skill level
+            <select className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-900" value={level} onChange={(e) => setLevelState(Number(e.target.value))}>
+              {[2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5].map((l) => <option key={l} value={l}>{l.toFixed(1)}</option>)}
+            </select>
+          </label>
+        )}
+        {dupe && <p className="text-xs font-medium text-red-600">That name is already in this session. Add a last initial, like "Sam R".</p>}
+        <button className="btn-primary w-full !min-h-12" onClick={add} disabled={!ready || dupe}><UserPlus size={18} /> {teams ? 'Add team' : 'Add to the line'}</button>
+        {joined.length > 0 && (
+          <ul className="space-y-1.5" aria-label="Just added">
+            {joined.map((j, i) => (
+              <li key={i} className="flex items-center justify-between gap-2 rounded-xl bg-green-50 px-3 py-2 text-sm dark:bg-green-950/40">
+                <span className="min-w-0 truncate font-bold">✓ {j.label}</span>
+                <span className="shrink-0 text-xs font-semibold text-green-800 dark:text-green-300">{status(j.label)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button className="btn-soft w-full" onClick={onClose}>{joined.length ? 'Done' : 'Cancel'}</button>
+      </div>
+    </Sheet>
   )
 }
 
