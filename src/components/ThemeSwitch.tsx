@@ -7,11 +7,11 @@ const OPTIONS: { id: ThemePref; label: string; icon: typeof Sun }[] = [
   { id: 'dark', label: 'Dark', icon: Moon },
 ]
 
-/** Three-way Light / Auto / Dark switch. `compact` shows icons only. */
-export default function ThemeSwitch({ compact = false }: { compact?: boolean }) {
+/** Three-way Light / Auto / Dark switch. `compact` shows icons only; `fill` stretches it to the width of its container. */
+export default function ThemeSwitch({ compact = false, fill = false }: { compact?: boolean; fill?: boolean }) {
   const pref = useTheme()
   return (
-    <div role="radiogroup" aria-label="Colour theme" className="inline-flex rounded-xl border border-slate-200 bg-slate-200/60 p-1 dark:border-white/10 dark:bg-white/5">
+    <div role="radiogroup" aria-label="Colour theme" className={`max-w-full min-w-0 rounded-xl border border-slate-200 bg-slate-200/60 p-1 dark:border-white/10 dark:bg-white/5 ${fill ? 'flex w-full' : 'inline-flex'}`}>
       {OPTIONS.map((o) => (
         <button
           key={o.id}
@@ -20,7 +20,7 @@ export default function ThemeSwitch({ compact = false }: { compact?: boolean }) 
           aria-label={`${o.label} theme`}
           title={`${o.label} theme`}
           onClick={() => setTheme(o.id)}
-          className={`flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
+          className={`flex min-h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1.5 text-xs font-semibold transition ${
             pref === o.id ? 'bg-white text-green-700 shadow-sm dark:bg-accent dark:text-accent-ink' : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
           }`}
         >

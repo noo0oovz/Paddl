@@ -92,7 +92,7 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
           <button className="btn-ghost w-full justify-start" onClick={onData}><HardDriveDownload size={18} /> Backup and restore</button>
           <UndoButton full />
           <SaveStatus className="block px-1 pb-1" />
-          <div className="pb-1"><ThemeSwitch /></div>
+          <div className="pb-1"><ThemeSwitch fill /></div>
           <button className="btn-ghost w-full justify-start" onClick={() => openSession(null)}><HomeIcon size={18} /> All sessions</button>
           <button className="btn-danger w-full" onClick={finish}><Flag size={18} /> End session</button>
         </div>

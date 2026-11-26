@@ -27,7 +27,7 @@ export default function MoreMenu({ onHelp, onHome, onData, onInstall }: { onHelp
       {open && (
         <div className="paddl-in absolute right-0 z-30 mt-2 w-64 space-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-slate-900">
           <div className="label !mb-1">Theme</div>
-          <ThemeSwitch />
+          <ThemeSwitch fill />
           <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onHelp() }}><HelpCircle size={18} /> How to use</button>
           <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onInstall() }}><Smartphone size={18} /> Add to home screen</button>
           <button className="btn-ghost w-full justify-start" onClick={() => { setOpen(false); onData() }}><HardDriveDownload size={18} /> Backup and restore</button>
