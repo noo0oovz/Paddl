@@ -5,6 +5,8 @@ import { countMatches, gamesOf, pairKey, type Counts } from './stats'
 export interface Unit {
   ids: string[]
   games: number
+  /** Games just played back to back, up to the session's limit (0 when the rule is off). */
+  run: number
   last: number
   level: number
   key: string
@@ -45,7 +47,27 @@ function hash(str: string): number {
   return ((x >>> 0) % 1000) / 1000
 }
 
+/** For each player: how many of the most recent finished games they played in a row (looking back at most `limit`). */
+function runsOf(s: Session, limit: number): Map<string, number> {
+  const out = new Map<string, number>()
+  if (limit <= 0) return out
+  const recent = [...s.matches].sort((a, b) => b.seq - a.seq)
+  const alive = new Set(s.players.map((p) => p.id))
+  for (const id of alive) {
+    let n = 0
+    for (const m of recent) {
+      if (n >= limit) break
+      if ([...m.a, ...m.b].includes(id)) n++
+      else break
+    }
+    if (n) out.set(id, n)
+  }
+  return out
+}
+
 export function availableUnits(s: Session, exclude: Set<string>, counts: Counts): Unit[] {
+  const limit = s.config.maxInRow ?? 0
+  const runs = runsOf(s, limit)
   const ok = (p: Player | undefined): p is Player => !!p && p.status === 'active' && !exclude.has(p.id)
   const byId = new Map(s.players.map((p) => [p.id, p]))
   if (s.config.format === 'teams') {
@@ -57,6 +79,7 @@ export function availableUnits(s: Session, exclude: Set<string>, counts: Counts)
       out.push({
         ids: [...t.playerIds],
         games: Math.max(...live.map((p) => gamesOf(p, counts))),
+        run: Math.min(...live.map((p) => runs.get(p.id) ?? 0)),
         last: Math.max(...live.map((p) => p.lastPlayed)),
         level: live[0].level + live[1].level,
         key: t.id,
@@ -67,7 +90,18 @@ export function availableUnits(s: Session, exclude: Set<string>, counts: Counts)
   }
   return s.players
     .filter((p) => ok(p))
-    .map((p) => ({ ids: [p.id], games: gamesOf(p, counts), last: p.lastPlayed, level: p.level, key: p.id, ...priOf([p]) }))
+    .map((p) => ({ ids: [p.id], games: gamesOf(p, counts), run: runs.get(p.id) ?? 0, last: p.lastPlayed, level: p.level, key: p.id, ...priOf([p]) }))
+}
+
+/**
+ * Back-to-back limit: among players on the SAME number of games, someone who has just played the limit in a row goes
+ * behind someone who sat out the last game. It never reorders people with different games (fewest games always
+ * first) and it only moves them down the line, so if there is nobody else a court is never left empty.
+ */
+function capGap(s: Session, x: Unit, y: Unit): number {
+  const limit = s.config.maxInRow ?? 0
+  if (limit <= 0) return 0
+  return Number(x.run >= limit) - Number(y.run >= limit)
 }
 
 /** Queue order: winners-stay is first-come-first-served; the rest favour fewest games, then longest wait. */
@@ -82,7 +116,7 @@ export function sortUnits(s: Session, units: Unit[], mode: Mode): Unit[] {
       (x.pri !== 0 ? x.pAt - y.pAt : 0) ||
       (mode === 'winners'
         ? x.last - y.last || x.games - y.games || tie(x, y)
-        : x.games - y.games || x.last - y.last || tie(x, y)),
+        : x.games - y.games || capGap(s, x, y) || x.last - y.last || tie(x, y)),
   )
 }
 

@@ -21,6 +21,8 @@ export interface Config {
   lateJoinMedian: boolean // late joiners / returners start at the median games played
   challengerCourt?: boolean // at session start, make Court 1 a challenger court
   winnersSplit?: boolean // winners stay: the winning pair splits and each partners a challenger (doubles only)
+  /** Most games one person plays back to back before someone who has waited goes first (0 = no limit). Missing on sessions saved before this rule, which behave as no limit. */
+  maxInRow?: number
   breakReturn?: 'keep' | 'back' // coming back from a break: keep earned place in line, or rejoin at the back
 }
 
@@ -106,6 +108,7 @@ export const DEFAULT_CONFIG: Config = {
   cap: null,
   maxStreak: 3,
   lateJoinMedian: true,
+  maxInRow: 0,
 }
 
 export const MODE_INFO: Record<Mode, { label: string; blurb: string }> = {

@@ -129,7 +129,8 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                 <Toggle checked={!!cfg.winnersSplit} onChange={(b) => set({ winnersSplit: b })} label="Split the winners" hint="Winners go to opposite sides and each partners a newcomer. Off keeps the winning pair together" />
               )}
               <Toggle checked={cfg.lateJoinMedian} onChange={(b) => set({ lateJoinMedian: b })} label="Fair late joins" hint="Late arrivals start at the average games played so they do not hog courts" />
-              <Toggle checked={cfg.breakReturn === 'back'} onChange={(b) => set({ breakReturn: b ? 'back' : 'keep' })} label="Back of the line after a break" hint="Off: someone returning from a break keeps the place they had earned" />
+              <Toggle checked={(cfg.maxInRow ?? 0) > 0} onChange={(b) => set({ maxInRow: b ? 2 : 0 })} label="Limit games in a row" hint="After 2 games in a row, someone who sat out goes first among players with the same number of games. Never leaves a court empty" />
+              <Toggle checked={cfg.breakReturn === 'back'} onChange={(b) => set({ breakReturn: b ? 'back' : 'keep' })} label="Back of the line after a break" hint="Off: someone returning from a break comes back level with the group. On: they also wait behind everyone already in line for their first game" />
             </div>
           )}
         </section>

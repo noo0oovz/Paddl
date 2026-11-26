@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ArrowDownToLine, Megaphone, Settings2, Trash2, ArrowUpToLine, Ban, Clock, Crown, LogIn, LogOut, Moon, Monitor, Plus, Repeat2, Shuffle, Trophy, UserPlus, Users, Volume2, VolumeX } from 'lucide-react'
 import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
-import { countMatches, gamesOf, nameOf } from '../engine/stats'
+import { countMatches, playedOf, nameOf } from '../engine/stats'
 import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
@@ -163,7 +163,7 @@ export default function Live({ s }: { s: Session }) {
                     <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
                       {u.pri < 0 && <span title="Playing next">⏭ </span>}
                       {u.pri > 0 && <span title="Sent to back">⏬ </span>}
-                      {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, gamesOf(p, counts)), 0)}</span>
+                      {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, playedOf(p, counts)), 0)}</span>
                       {etaText(eta.get(u.ids[0])) && <span className="ml-1 text-xs font-normal text-green-700 dark:text-green-400">{etaText(eta.get(u.ids[0]))}</span>}
                     </button>
                   ))}
@@ -404,7 +404,7 @@ function SubSheet({ s, courtId, outId, onClose }: { s: Session; courtId: string;
             <div className="grid grid-cols-2 gap-2">
               {waiting.map((id) => (
                 <button key={id} className="btn-soft" onClick={() => { updateActive((x) => substitute(x, courtId, outId, id)); onClose() }}>
-                  {nameOf(s, id)} <span className="text-xs font-normal text-slate-500">· {gamesOf(s.players.find((p) => p.id === id)!, counts)}</span>
+                  {nameOf(s, id)} <span className="text-xs font-normal text-slate-500">· {playedOf(s.players.find((p) => p.id === id)!, counts)}</span>
                 </button>
               ))}
             </div>
@@ -536,7 +536,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                   {p.name}
                 </button>
                 <div className="text-xs text-slate-500">
-                  {gamesOf(p, counts)} games{onCourt.has(p.id) ? ' · on court' : ''}{p.status !== 'active' ? ` · ${p.status === 'resting' ? 'on a break' : 'left'}` : ''}
+                  {playedOf(p, counts)} games{onCourt.has(p.id) ? ' · on court' : ''}{p.status !== 'active' ? ` · ${p.status === 'resting' ? 'on a break' : 'left'}` : ''}
                 </div>
               </div>
               {s.config.mode === 'skill' && p.status === 'active' && (

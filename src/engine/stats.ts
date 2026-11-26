@@ -23,8 +23,14 @@ export function countMatches(matches: Match[]): Counts {
   return { games, partner, opp }
 }
 
+/** Games used to order the queue: games actually played plus any catch-up credit given to a late joiner or returner. */
 export function gamesOf(p: Player, counts: Counts): number {
   return p.baseGames + (counts.games.get(p.id) ?? 0)
+}
+
+/** Games a player has really played. This is what people see; the catch-up credit above is only for ordering the queue. */
+export function playedOf(p: Player, counts: Counts): number {
+  return counts.games.get(p.id) ?? 0
 }
 
 /** Median games played among active players (places late joiners fairly). */

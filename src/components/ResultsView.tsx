@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, Crown, Flame, Timer, Trophy } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { PaddleBall } from './art'
-import { nameOf, standings, summarize, type PlayerStat } from '../engine/stats'
+import { nameOf, playerStandings, standings, summarize, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
 import { awardsByName } from '../engine/insights'
 
@@ -145,11 +145,33 @@ export function StandingsSection({ s }: { s: Session }) {
   )
 }
 
+/**
+ * How even was the night? Judged only on the games each person was there for, so a late joiner or someone who rested is
+ * compared with their own time present. Returns null when there is too little to say anything fair.
+ */
+export function fairnessNote(s: Session): { text: string; even: boolean } | null {
+  const rows = playerStandings(s).filter((p) => p.eligible >= 6)
+  if (rows.length < 3) return null
+  const shares = rows.map((p) => p.played / p.eligible)
+  const spread = Math.max(...shares) - Math.min(...shares)
+  const most = Math.max(...rows.map((p) => p.played))
+  const least = Math.min(...rows.map((p) => p.played))
+  const even = spread <= 0.1
+  return {
+    even,
+    text: even
+      ? `Everyone who was there got an even share: each player played between ${Math.round(Math.min(...shares) * 100)}% and ${Math.round(Math.max(...shares) * 100)}% of the games they were present for.`
+      : `Playing time was a little uneven: shares ranged from ${Math.round(Math.min(...shares) * 100)}% to ${Math.round(Math.max(...shares) * 100)}% of the games each person was present for (${least} to ${most} games).`,
+  }
+}
+
 export function ParticipationSection({ s }: { s: Session }) {
+  const note = fairnessNote(s)
   const rows = [...standings(s)].sort((a, b) => b.played - a.played || b.playMs - a.playMs || a.name.localeCompare(b.name))
   const max = Math.max(1, ...rows.map((r) => r.played))
   return (
     <Section emoji="⏱" title="Games played" hint="How many games each player got, and their minutes on court">
+      {note && <p className={`mx-4 mt-3 rounded-xl px-3 py-2 text-sm font-semibold ${note.even ? 'bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300' : 'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'}`}>{note.even ? '✅ ' : 'ℹ️ '}{note.text}</p>}
       <ul className="space-y-3 px-4 py-4">
         {rows.map((r) => (
           <li key={r.id}>

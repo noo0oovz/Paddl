@@ -4,8 +4,8 @@ import {
 import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, splitWinners, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
 
-/** Games a player can miss on a break before the fairness catch-up starts. */
-export const BREAK_GRACE = 2
+/** Games a returning player may still be owed beyond the group median. 0: they come back level with the group, never ahead. */
+export const BREAK_GRACE = 0
 export const MIN_LEVEL = 2
 export const MAX_LEVEL = 5.5
 
@@ -360,8 +360,8 @@ export function substitute(s: Session, courtId: string, outId: string, inId: str
       m.a = swap(m.a)
       m.b = swap(m.b)
     }
+    // The player who stepped out did not finish a game, so they keep the place in line they had earned.
     clearPrio(d, [...inIds, ...outIds])
-    for (const p of d.players) if (outIds.includes(p.id)) p.lastPlayed = d.seq
   })
 }
 
@@ -398,7 +398,8 @@ export function cancelMatch(s: Session, courtId: string): Session {
     const ids = [...c.match.a, ...c.match.b]
     c.match = null
     c.hold = null
-    for (const p of d.players) if (ids.includes(p.id)) p.lastPlayed = d.seq
+    // Nothing was recorded, so nobody is treated as having just played: they keep the place they had earned.
+    clearPrio(d, ids)
   })
 }
 
@@ -546,8 +547,8 @@ export function setCourts(s: Session, count: number): Session {
 export function setConfig(s: Session, patch: Partial<Config>): Session {
   return mutate(s, (d) => {
     // Format is fixed once play starts (use setMode for the queue mode); only game rules change here.
-    const { target, winBy2, cap, maxStreak, lateJoinMedian } = { ...d.config, ...patch }
-    Object.assign(d.config, { target, winBy2, cap, maxStreak, lateJoinMedian })
+    const { target, winBy2, cap, maxStreak, lateJoinMedian, maxInRow } = { ...d.config, ...patch }
+    Object.assign(d.config, { target, winBy2, cap, maxStreak, lateJoinMedian, maxInRow })
   })
 }
 
