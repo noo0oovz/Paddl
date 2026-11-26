@@ -18,7 +18,8 @@
       // Set the theme before first paint so there is no light/dark flash.
       try {
         var t = localStorage.getItem('paddl:theme') || 'dark'
-        if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        // Only an explicit light choice is light. Anything else, including an old Auto choice, is dark.
+        if (t !== 'light') {
           document.documentElement.classList.add('dark')
         }
       } catch (e) {}

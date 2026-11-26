@@ -1,13 +1,12 @@
-import { Monitor, Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { setTheme, useTheme, type ThemePref } from '../lib/theme'
 
 const OPTIONS: { id: ThemePref; label: string; icon: typeof Sun }[] = [
   { id: 'light', label: 'Light', icon: Sun },
-  { id: 'system', label: 'Auto', icon: Monitor },
   { id: 'dark', label: 'Dark', icon: Moon },
 ]
 
-/** Three-way Light / Auto / Dark switch. `compact` shows icons only; `fill` stretches it to the width of its container. */
+/** Two-way Light / Dark switch. `compact` shows icons only; `fill` stretches it to the width of its container. */
 export default function ThemeSwitch({ compact = false, fill = false }: { compact?: boolean; fill?: boolean }) {
   const pref = useTheme()
   return (
