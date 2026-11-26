@@ -185,3 +185,18 @@ export function Illustration({ scene, className = '' }: { scene: Scene; classNam
 export function Glow({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`relative ${className}`}>{children}</div>
 }
+
+/**
+ * "VS" between two teams. Bold lime on dark so it is unmistakable from across a court: players should never have to
+ * guess which side is their opponent. `big` is for the Board and TV.
+ */
+export function Vs({ big = false, className = '' }: { big?: boolean; className?: string }) {
+  return (
+    <span
+      aria-label="versus"
+      className={`inline-grid shrink-0 place-items-center rounded-full bg-slate-900 font-black tracking-wider text-accent shadow-[0_0_0_2px_rgba(182,255,59,0.55),0_4px_14px_-4px_rgba(0,0,0,0.5)] ${big ? 'h-12 min-w-12 px-3 text-xl' : 'h-8 min-w-8 px-2 text-sm'} ${className}`}
+    >
+      VS
+    </span>
+  )
+}

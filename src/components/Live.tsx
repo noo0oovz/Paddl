@@ -7,7 +7,7 @@ import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
 import { useConfirm } from './Confirm'
-import { HalfCourt } from './art'
+import { HalfCourt, Vs } from './art'
 import {
   addCourt, addPlayer, addTeam, cancelMatch, clearPriority, finishMatch, playNext, pullOut, remixCourt, remixNext, renamePlayer, sendBack, planCourtRemoval, removeCourt, MAX_COURTS, setLevel,
   setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
@@ -248,7 +248,7 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
             <Half s={s} ids={m.a} side="far" king={winners && m.streak > 0} onSub={onSub} />
             <div className="relative z-10 flex items-center gap-2 bg-slate-900 px-3 py-1.5 text-[10px] font-black tracking-[0.3em] text-slate-300 dark:bg-black/60" aria-hidden>
               <span className="h-px flex-1 bg-[repeating-linear-gradient(90deg,#8a97b1_0_3px,transparent_3px_7px)]" />
-              NET
+              <Vs />
               <span className="h-px flex-1 bg-[repeating-linear-gradient(90deg,#8a97b1_0_3px,transparent_3px_7px)]" />
             </div>
             <Half s={s} ids={m.b} side="near" onSub={onSub} />
@@ -516,7 +516,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
       {next ? (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
           <TeamBox s={s} ids={next.a} onPick={onPick} onSwap={onSwap} canSwap={waiting > need} />
-          <div className="text-center text-xs font-bold tracking-widest text-slate-400">{next.b ? 'VS' : 'CHALLENGE'}</div>
+          <div className="flex justify-center">{next.b ? <Vs /> : <span className="text-xs font-bold tracking-widest text-slate-500 dark:text-slate-400">CHALLENGE</span>}</div>
           {next.b ? (
             <TeamBox s={s} ids={next.b} onPick={onPick} onSwap={onSwap} canSwap={waiting > need} />
           ) : (

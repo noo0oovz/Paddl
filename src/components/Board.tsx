@@ -9,7 +9,7 @@ import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
 import { elapsed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
-import { CourtLines, PaddleBall } from './art'
+import { CourtLines, PaddleBall, Vs } from './art'
 import VoiceSheet from './VoiceSheet'
 import { courtCall, upNextCall } from '../lib/announce'
 import { useAnnouncer } from '../lib/useAnnouncer'
@@ -129,7 +129,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                   {m ? (
                     <div className="flex flex-1 flex-col justify-center gap-2 p-4 sm:p-5">
                       <BoardTeam s={s} ids={m.a} king={m.streak > 0} onWin={() => win(c.id, 'a')} />
-                      <div className="text-center text-sm font-bold tracking-[0.4em] text-slate-500">VS</div>
+                      <div className="flex justify-center"><Vs big /></div>
                       <BoardTeam s={s} ids={m.b} onWin={() => win(c.id, 'b')} />
                       <button
                         onClick={() => announce(c.id, courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
@@ -184,7 +184,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                         <div className="text-2xl font-extrabold leading-tight">{join(m.a.map((id) => nameOf(s, id)))}</div>
                         {m.b ? (
                           <>
-                            <div className="text-xs font-bold tracking-widest text-slate-500">VS</div>
+                            <div className="my-1 flex"><Vs /></div>
                             <div className="text-2xl font-extrabold leading-tight">{join(m.b.map((id) => nameOf(s, id)))}</div>
                           </>
                         ) : (
