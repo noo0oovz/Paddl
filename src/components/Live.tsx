@@ -71,7 +71,7 @@ export default function Live({ s }: { s: Session }) {
   function remix(fn: (x: Session) => Session, what: string) {
     const changed = fn(s) !== s
     if (changed) updateActive(fn)
-    flash(changed ? `${what} remixed.` : 'No different match-up is possible with the players available right now.')
+    flash(changed ? `${what} remixed.` : `No different match-up is possible for ${what.toLowerCase()} with the players waiting. To mix more, use Remix on a court game, or add a player.`)
   }
 
   /** One tap: send a player out of the next match to the back of the line; the next in line steps up. */
