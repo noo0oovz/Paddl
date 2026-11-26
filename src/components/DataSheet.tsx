@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Download, RotateCcw, ShieldCheck, Upload } from 'lucide-react'
 import { backupFileName, parseBackup, type Backup } from '../lib/backup'
 import { download } from '../lib/exportImage'
-import { fmtDate } from '../lib/util'
+import { fmtDate, plural } from '../lib/util'
 import { exportAll, hasSafetyCopy, restoreBackup, undoRestore, useData, type RestoreReport } from '../store'
 import { Sheet } from './ui'
 
@@ -72,7 +72,7 @@ export default function DataSheet({ onClose }: { onClose: () => void }) {
               <div className="text-sm font-bold">{picked.name}</div>
               <ul className="text-sm text-slate-600 dark:text-slate-300">
                 <li>🗓 Saved {fmtDate(picked.backup.exportedAt)}</li>
-                <li>📋 {picked.backup.sessions.length} {picked.backup.sessions.length === 1 ? 'session' : 'sessions'}, {games} games</li>
+                <li>📋 {plural(picked.backup.sessions.length, 'session')}, {plural(games, 'game')}</li>
                 <li>👥 {picked.backup.roster.length} saved players</li>
               </ul>
               {picked.warnings.length > 0 && (

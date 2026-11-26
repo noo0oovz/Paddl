@@ -7,6 +7,11 @@ export function fmtDuration(ms: number): string {
   return `${h} h ${m % 60} min`
 }
 
+/** "1 game", "2 games". */
+export function plural(n: number, one: string, many = one + 's'): string {
+  return `${n} ${n === 1 ? one : many}`
+}
+
 export function fmtDate(t: number): string {
   return new Date(t).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }

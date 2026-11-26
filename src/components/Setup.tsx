@@ -62,7 +62,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
     <div className="mx-auto w-full max-w-2xl px-4 pt-4 pb-32">
       <div className="mb-2 flex items-center justify-between">
         <button className="btn-ghost -ml-3" onClick={onCancel}><ArrowLeft size={18} /> Back</button>
-        <ThemeSwitch compact />
+        <ThemeSwitch />
       </div>
       <h1 className="text-2xl font-extrabold">New session</h1>
 
@@ -93,7 +93,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                     cfg.mode === m ? 'border-green-600 bg-green-50 ring-2 ring-green-600/30 dark:bg-green-950/40' : 'border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
                   }`}
                 >
-                  <div className="text-sm font-bold">{MODE_INFO[m].label}{m === 'fair' && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold text-accent-ink">Recommended</span>}</div>
+                  <div className="text-sm font-bold">{MODE_INFO[m].label}{m === 'fair' && <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-accent-ink">Recommended</span>}</div>
                   <div className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{MODE_INFO[m].blurb}</div>
                 </button>
               ))}
@@ -107,7 +107,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
             <div className="label">Play to</div>
             <Segmented<number> value={cfg.target} onChange={(n) => set({ target: n })} options={[11, 15, 21].map((n) => ({ value: n, label: String(n) }))} />
           </div>
-          <button type="button" className="text-sm font-semibold text-green-700 dark:text-green-400" onClick={() => setAdvanced((v) => !v)}>
+          <button type="button" className="inline-flex min-h-11 items-center text-sm font-semibold text-green-700 dark:text-green-400" onClick={() => setAdvanced((v) => !v)} aria-expanded={advanced}>
             {advanced ? 'Hide' : 'Show'} more rules
           </button>
           {advanced && (
@@ -138,7 +138,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
         <section className="card p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <div className="label !mb-0">{isTeams ? `Teams (${pairs.length})` : `Players (${players.length})`}</div>
-            {problem && <div className="text-xs font-medium text-amber-600">{problem}</div>}
+            {problem && <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">{problem}</div>}
           </div>
 
           {isTeams ? (
@@ -162,7 +162,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
               <div className="flex gap-2">
                 <input
                   className="input"
-                  placeholder="Type a name, press Enter"
+                  placeholder="Type a name, then Enter"
                   value={draft}
                   autoCapitalize="words"
                   onChange={(e) => setDraft(e.target.value)}

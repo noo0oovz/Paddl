@@ -14,7 +14,7 @@ import {
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
 import { undo, updateActive } from '../store'
-import { elapsed, join, useNow } from '../lib/util'
+import { elapsed, join, plural, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
 import { courtCall, upNextCall } from '../lib/announce'
@@ -134,10 +134,10 @@ export default function Live({ s }: { s: Session }) {
           aria-label="Show the next match"
         >
           <span className="shrink-0 text-xs font-extrabold tracking-wide text-brand uppercase">Up next</span>
-          <span className="min-w-0 flex-1 truncate font-semibold">
+          <span className="min-w-0 flex-1 leading-snug font-semibold [overflow-wrap:anywhere]">
             {join(nextUp.a.map((id) => nameOf(s, id)))}{nextUp.b ? ` vs ${join(nextUp.b.map((id) => nameOf(s, id)))}` : ' challenge the winners'}
+            {etaText(eta.get(nextUp.a[0])) && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{etaText(eta.get(nextUp.a[0]))}</span>}
           </span>
-          {etaText(eta.get(nextUp.a[0])) && <span className="shrink-0 text-xs text-slate-500 dark:text-slate-400">{etaText(eta.get(nextUp.a[0]))}</span>}
         </button>
       )}
 
@@ -205,9 +205,9 @@ export default function Live({ s }: { s: Session }) {
       {adding && <AddPlayerSheet s={s} onClose={() => setAdding(false)} />}
       {voiceOpen && <VoiceSheet onClose={() => setVoiceOpen(false)} />}
       {won && (
-        <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 bottom-20 z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:bottom-4">
+        <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 top-[3.75rem] z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:top-auto md:bottom-4">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Trophy size={15} /></span>
-          <span className="min-w-0 flex-1 truncate text-sm font-bold">{won.text}</span>
+          <span className="min-w-0 flex-1 text-sm leading-snug font-bold [overflow-wrap:anywhere]">{won.text}</span>
           <button className="btn-soft !min-h-9 shrink-0 !px-3 !text-white" onClick={() => { undo(); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
         </div>
       )}
@@ -547,7 +547,8 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
             <li key={p.id} className="flex items-center gap-2 py-2">
               <div className="min-w-0 flex-1">
                 <button
-                  className="block max-w-full truncate text-left font-semibold"
+                  className="block min-h-9 w-full truncate text-left font-semibold leading-9"
+                  title="Tap to rename"
                   onClick={() => {
                     const n = prompt('Rename player', p.name)
                     if (n) updateActive((x) => renamePlayer(x, p.id, n))
@@ -556,7 +557,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                   {p.name}
                 </button>
                 <div className="text-xs text-slate-500">
-                  {playedOf(p, counts)} games{onCourt.has(p.id) ? ' · on court' : ''}{p.status !== 'active' ? ` · ${p.status === 'resting' ? 'on a break' : 'left'}` : ''}
+                  {plural(playedOf(p, counts), 'game')}{onCourt.has(p.id) ? ' · on court' : ''}{p.status !== 'active' ? ` · ${p.status === 'resting' ? 'on a break' : 'left'}` : ''}
                 </div>
               </div>
               {s.config.mode === 'skill' && p.status === 'active' && (

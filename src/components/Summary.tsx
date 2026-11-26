@@ -4,7 +4,7 @@ import type { Session } from '../engine/types'
 import { nameOf, standings, summarize } from '../engine/stats'
 import { awards, awardsByName, type Award } from '../engine/insights'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
-import { fmtDate, fmtDuration, fmtTime, join } from '../lib/util'
+import { fmtDate, fmtDuration, fmtTime, join, plural } from '../lib/util'
 import { reopenSession } from '../engine/session'
 import { removeSession, updateActive } from '../store'
 import { medal } from './Standings'
@@ -35,7 +35,7 @@ function Frame({ s, title, children }: { s: Session; title: string; children: Re
         <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 2.5, color: C.lime }}>PADDL · {title}</div>
         <div style={{ fontSize: 34, fontWeight: 800, marginTop: 6, lineHeight: 1.15 }}>{s.name}</div>
         <div style={{ fontSize: 14, marginTop: 6, opacity: 0.9 }}>
-          {fmtDate(s.createdAt)} · {s.players.length} players · {sum.matches} games · {fmtDuration(sum.durationMs)}
+          {fmtDate(s.createdAt)} · {plural(s.players.length, 'player')} · {plural(sum.matches, 'game')} · {fmtDuration(sum.durationMs)}
         </div>
       </div>
       <div style={{ padding: '22px 32px 8px' }}>{children}</div>
@@ -317,7 +317,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
       {dialog}
       <div className="mb-2 flex items-center justify-between">
         <button className="btn-ghost -ml-3" onClick={onBack}><ArrowLeft size={18} /> Back</button>
-        <ThemeSwitch compact />
+        <ThemeSwitch />
       </div>
 
       <header className="card relative overflow-hidden px-5 pt-6 pb-5">
@@ -375,7 +375,7 @@ export default function Summary({ s, onBack }: { s: Session; onBack: () => void 
         </button>
         {msg && <p className="mt-3 text-sm font-semibold text-brand" role="status">{msg}</p>}
 
-        <button className="mt-3 flex w-full items-center justify-between text-left text-sm font-semibold text-slate-500 dark:text-slate-400" onClick={() => setPreview((v) => !v)} aria-expanded={preview}>
+        <button className="mt-3 flex min-h-11 w-full items-center justify-between text-left text-sm font-semibold text-slate-500 dark:text-slate-400" onClick={() => setPreview((v) => !v)} aria-expanded={preview}>
           <span>Preview the pictures</span>
           <ChevronDown size={16} className={`transition ${preview ? 'rotate-180' : ''}`} />
         </button>

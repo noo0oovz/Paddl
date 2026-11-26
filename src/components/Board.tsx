@@ -11,6 +11,7 @@ import { elapsed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall, Vs } from './art'
 import VoiceSheet from './VoiceSheet'
+import BoardCourt from './BoardCourt'
 import { courtCall, upNextCall } from '../lib/announce'
 import { useAnnouncer } from '../lib/useAnnouncer'
 import { TIME_MARK_MIN } from '../lib/cues'
@@ -206,9 +207,15 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                   </div>
                   {m ? (
                     <div className="flex flex-1 flex-col justify-center gap-2 p-4 sm:p-5">
-                      <BoardTeam s={s} ids={m.a} king={m.streak > 0} onWin={() => win(c.id, 'a')} />
-                      <div className="flex justify-center"><Vs big /></div>
-                      <BoardTeam s={s} ids={m.b} onWin={() => win(c.id, 'b')} />
+                      <BoardCourt
+                        label={`${c.name}: ${join(m.a.map((id) => nameOf(s, id)))} versus ${join(m.b.map((id) => nameOf(s, id)))}`}
+                        a={{ names: m.a.map((id) => nameOf(s, id)), label: join(m.a.map((id) => nameOf(s, id))) }}
+                        b={{ names: m.b.map((id) => nameOf(s, id)), label: join(m.b.map((id) => nameOf(s, id))) }}
+                        king={m.streak > 0}
+                        locked={locked}
+                        onWinA={() => win(c.id, 'a')}
+                        onWinB={() => win(c.id, 'b')}
+                      />
                       <button
                         onClick={() => announce(c.id, courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
                         aria-label={speakingId === c.id ? `Stop announcing ${c.name}` : `Call out ${c.name}`}
@@ -309,25 +316,5 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         </div>
       )}
     </div>
-  )
-}
-
-/** One team on a court: the whole block is a single big button that records the win. */
-function BoardTeam({ s, ids, king, onWin }: { s: Session; ids: string[]; king?: boolean; onWin: () => void }) {
-  const label = join(ids.map((id) => nameOf(s, id)))
-  return (
-    <button
-      onClick={onWin}
-      aria-label={`${label} won`}
-      className={`group grid w-full gap-2 rounded-2xl border-2 p-2 text-center transition active:scale-[0.985] ${ids.length > 1 ? 'grid-cols-[repeat(2,minmax(0,1fr))]' : 'grid-cols-[minmax(0,1fr)]'} ${
-        king ? 'border-amber-400/50 bg-amber-400/10 hover:border-amber-300' : 'border-white/10 bg-white/5 hover:border-accent hover:bg-accent/10'
-      }`}
-    >
-      {ids.map((id) => (
-        <span key={id} className={`truncate rounded-xl px-3 py-5 text-3xl font-black tracking-tight sm:py-7 sm:text-5xl ${king ? 'text-amber-200' : 'text-white'}`}>
-          {nameOf(s, id)}
-        </span>
-      ))}
-    </button>
   )
 }

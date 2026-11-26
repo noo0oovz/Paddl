@@ -6,13 +6,13 @@ export default function UndoButton({ full = false }: { full?: boolean }) {
   const { undo: depth } = useData()
   return (
     <button
-      className={`btn-soft !min-h-9 !px-3 ${full ? 'w-full justify-start' : ''}`}
+      className={`btn-soft !min-h-9 ${full ? '!px-3 w-full justify-start' : '!px-2.5 min-[420px]:!px-3'}`}
       onClick={undo}
       disabled={!depth}
       aria-label={`Undo last action${depth ? ` (${depth} available)` : ''}`}
       title={depth ? `Undo (${depth} step${depth === 1 ? '' : 's'} available)` : 'Nothing to undo'}
     >
-      <Undo2 size={16} /> Undo
+      <Undo2 size={16} /> <span className={full ? '' : 'hidden min-[420px]:inline'}>Undo</span>
     </button>
   )
 }

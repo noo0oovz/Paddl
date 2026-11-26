@@ -52,7 +52,7 @@ export default function VoiceSheet({ onClose }: { onClose: () => void }) {
                   className={`flex w-full items-center justify-between gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm transition ${!current ? 'border-accent bg-accent/10' : 'border-slate-200 dark:border-white/10'}`}
                 >
                   <span><span className="font-bold">Automatic</span><span className="block text-xs text-slate-500 dark:text-slate-400">Best available: {best}</span></span>
-                  {!current && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-black text-accent-ink">In use</span>}
+                  {!current && <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-black text-accent-ink">In use</span>}
                 </button>
               </li>
               {voices.map((v, i) => (
@@ -67,7 +67,7 @@ export default function VoiceSheet({ onClose }: { onClose: () => void }) {
                       <span className="block truncate font-semibold">{v.name}</span>
                       <span className="block text-xs text-slate-500 dark:text-slate-400">{v.lang}{i === 0 ? ' · sounds most natural' : ''}</span>
                     </span>
-                    {current === v.name && <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-black text-accent-ink">In use</span>}
+                    {current === v.name && <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-black text-accent-ink">In use</span>}
                   </button>
                 </li>
               ))}
