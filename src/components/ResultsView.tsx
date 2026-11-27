@@ -3,9 +3,9 @@ import { ChevronDown, Crown, Flame, Timer, Trophy } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { PaddleBall } from './art'
 import { placeLabels } from './Standings'
-import { nameOf, playerStandings, standings, summarize, type PlayerStat } from '../engine/stats'
+import { nameOf, playerStandings, podiumOf, standings, summarize, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
-import { awardsByName } from '../engine/insights'
+import { awardsByName, highlightsNotInAwards } from '../engine/insights'
 
 /** Time on court as minutes ("38 min", "1 h 5 min"); under a minute shows "<1 min", no data shows a dash. */
 export function minutes(ms: number): string {
@@ -23,35 +23,33 @@ const medal = (i: number) => MEDAL[i] ?? String(i + 1)
  * Podium: champion centre-stage, runners-up either side. Built from the same standings as the images.
  * -------------------------------------------------------------------------------------------- */
 export function Podium({ rows }: { rows: PlayerStat[] }) {
-  const top = rows.slice(0, 3).filter((r) => r.wins > 0)
-  if (!top.length) return null
-  // Level players share a place, the same as in the standings tables (rank by record, not by position in the sorted list).
-  const rank = top.map((r, k) => { let j = k; while (j > 0 && top[j - 1].wins === r.wins && top[j - 1].losses === r.losses && top[j - 1].diff === r.diff) j--; return j })
-  // Visual order: 2nd, 1st, 3rd.
-  const order = [top[1], top[0], top[2]]
-  const place = [1, 0, 2]
-  const height = ['h-16', 'h-24', 'h-12']
+  const list = podiumOf(rows)
+  if (!list.length) return null
+  // Classic arrangement when the top three places are one person each: 2nd, 1st, 3rd. With ties there can be more
+  // people than that (everyone tied for a place stands together), so they go in order of place, the champions in the middle.
+  const classic = list.length === 3 && list.every((x, k) => x.place === k + 1)
+  const order = classic ? [list[1], list[0], list[2]] : list
+  const heightOf = (place: number) => (place === 1 ? 'h-24' : place === 2 ? 'h-16' : 'h-12')
+  const cols = Math.min(order.length, 5)
   return (
     <section className="card relative mt-5 overflow-hidden px-3 pt-6 pb-0 text-center" aria-label="Podium">
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-accent/10 to-transparent" />
-            <div className="relative grid grid-cols-3 items-end gap-2 border-b-2 border-accent/60 shadow-[0_8px_24px_-12px_rgba(182,255,59,0.7)]">
-        {order.map((p, col) => {
-          if (!p) return <div key={col} />
-          const i = rank[place[col]] // 0 = first place, tied players share it
-          const first = i === 0
+      <div className="relative grid items-end gap-2 border-b-2 border-accent/60 shadow-[0_8px_24px_-12px_rgba(182,255,59,0.7)]" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+        {order.map(({ row: p, place }) => {
+          const first = place === 1
           return (
             <div key={p.id} className="flex flex-col items-center">
-              <div className={first ? 'text-4xl drop-shadow-[0_0_14px_rgba(255,194,51,0.7)]' : 'text-3xl'}>{first ? '👑' : medal(i)}</div>
+              <div className={first ? 'text-4xl drop-shadow-[0_0_14px_rgba(255,194,51,0.7)]' : 'text-3xl'}>{first ? '👑' : medal(place - 1)}</div>
               <div className={`mt-1 line-clamp-2 w-full px-1 font-black leading-tight tracking-tight break-words ${first ? 'text-lg' : 'text-sm'}`}>{p.name}</div>
               <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">{p.wins}W · {p.losses}L</div>
               <div
-                className={`flex w-full items-start justify-center rounded-t-2xl border border-b-0 pt-2 text-2xl font-black ${height[col]} ${
+                className={`flex w-full items-start justify-center rounded-t-2xl border border-b-0 pt-2 text-2xl font-black ${heightOf(place)} ${
                   first
                     ? 'border-accent/50 bg-gradient-to-b from-accent/30 to-accent/5 text-brand shadow-[0_0_30px_-8px_rgba(182,255,59,0.7)]'
                     : 'border-slate-200 bg-slate-900/5 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-300'
                 }`}
               >
-                {i + 1}
+                {place}
               </div>
             </div>
           )
@@ -223,8 +221,8 @@ export function HistorySection({ s }: { s: Session }) {
 export function Highlights({ s }: { s: Session }) {
   const sum = summarize(s)
   const items: { icon: React.ReactNode; label: string; value: string; sub: string }[] = []
-  if (sum.bestDuo) items.push({ icon: <Crown size={16} />, label: 'Best duo', value: join(sum.bestDuo.ids.map((id) => nameOf(s, id))), sub: `${sum.bestDuo.wins}–${sum.bestDuo.losses} together` })
-  if (sum.hotStreak && sum.hotStreak.longestStreak < 3) items.push({ icon: <Flame size={16} />, label: 'Hot streak', value: sum.hotStreak.name, sub: `${sum.hotStreak.longestStreak} in a row` })
+  // Only what the awards above do not already say: Best duo repeated Dynamic Duo, and Hot streak repeated On Fire.
+  for (const h of highlightsNotInAwards(s)) items.push({ icon: h.key === 'duo' ? <Crown size={16} /> : <Flame size={16} />, label: h.label, value: h.value, sub: h.sub })
   if (sum.biggestWin) items.push({ icon: <Trophy size={16} />, label: 'Biggest win', value: `${sum.biggestWin.scoreA}–${sum.biggestWin.scoreB}`, sub: join((sum.biggestWin.winner === 'a' ? sum.biggestWin.a : sum.biggestWin.b).map((id) => nameOf(s, id))) })
   if (!items.length) return null
   return (

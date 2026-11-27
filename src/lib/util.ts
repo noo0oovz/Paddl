@@ -77,3 +77,17 @@ export const gameIsArmed = (startedAt: number, now = Date.now()) => armingOff() 
  */
 export const isEnter = (e: { key: string; keyCode?: number; nativeEvent?: { isComposing?: boolean } }) =>
   e.key === 'Enter' && !e.nativeEvent?.isComposing && e.keyCode !== 229
+
+/** On the Board a result is recorded by pressing and holding a team this long, so a stray touch can never count a game. */
+export const WIN_HOLD_MS = 1500
+/** Unlocking the Board takes a shorter hold: it only undoes the lock and cannot change a result. */
+export const UNLOCK_HOLD_MS = 1000
+/** How long a win must be held. Browser tests set `paddl:test-hold-ms` to a few milliseconds so they do not each wait 1.5 s; nothing in the app sets it. */
+export const winHoldMs = () => {
+  try {
+    const n = Number(localStorage.getItem('paddl:test-hold-ms'))
+    return Number.isFinite(n) && n > 0 ? n : WIN_HOLD_MS
+  } catch {
+    return WIN_HOLD_MS
+  }
+}

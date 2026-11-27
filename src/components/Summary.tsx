@@ -1,8 +1,8 @@
 import { forwardRef, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, Download, FileSpreadsheet, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
-import { nameOf, standings, summarize } from '../engine/stats'
-import { awards, awardsByName, type Award } from '../engine/insights'
+import { nameOf, podiumOf, standings, summarize } from '../engine/stats'
+import { awards, highlightsNotInAwards, awardsByName, type Award } from '../engine/insights'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
 import { fmtDate, fmtDuration, fmtTime, join, plural } from '../lib/util'
 import { reopenSession } from '../engine/session'
@@ -51,10 +51,11 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
   const rows = standings(s)
   const list = awards(s)
   const sum = summarize(s)
-  const top = rows.slice(0, 3).filter((r) => r.wins > 0)
-  const order = [top[1], top[0], top[2]]
-  const place = [1, 0, 2]
-  const heights = [74, 106, 56]
+  // The same podium as on the screen: everyone in the top three PLACES who has won (a tie for 2nd shows every one of them).
+  const podium = podiumOf(rows)
+  const classic = podium.length === 3 && podium.every((x, k) => x.place === k + 1)
+  const order = classic ? [podium[1], podium[0], podium[2]] : podium
+  const heightOf = (place: number) => (place === 1 ? 106 : place === 2 ? 74 : 56)
   const tiles: [string, string, string][] = [
     ['🎾', String(sum.matches), 'GAMES'],
     ['👥', String(s.players.length), 'PLAYERS'],
@@ -70,17 +71,16 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
       </div>
 
       <div style={{ padding: '24px 32px 0' }}>
-        {top.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, alignItems: 'end', borderBottom: `3px solid ${C.lime}`, background: 'linear-gradient(180deg, rgba(182,255,59,0.14), rgba(182,255,59,0))', borderRadius: '16px 16px 0 0', padding: '16px 10px 0' }}>
-            {order.map((p, col) => {
-              if (!p) return <div key={col} />
-              const i = place[col]
+        {podium.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(order.length, 5)}, minmax(0, 1fr))`, gap: 10, alignItems: 'end', borderBottom: `3px solid ${C.lime}`, background: 'linear-gradient(180deg, rgba(182,255,59,0.14), rgba(182,255,59,0))', borderRadius: '16px 16px 0 0', padding: '16px 10px 0' }}>
+            {order.map(({ row: p, place: pl }) => {
+              const i = pl - 1 // 0 = first place; everyone tied for a place shares it
               return (
                 <div key={p.id} style={{ textAlign: 'center', minWidth: 0 }}>
                   <div style={{ fontSize: i === 0 ? 40 : 32, lineHeight: 1.1 }}>{i === 0 ? '👑' : i === 1 ? '🥈' : '🥉'}</div>
-                  <div style={{ fontSize: i === 0 ? 20 : 16, fontWeight: 800, marginTop: 4, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{p.name}</div>
+                  <div style={{ fontSize: i === 0 ? 20 : order.length > 3 ? 14 : 16, fontWeight: 800, marginTop: 4, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{p.name}</div>
                   <div style={{ fontSize: 13, color: C.mute, margin: '2px 0 8px', fontWeight: 600 }}>{p.wins}W · {p.losses}L</div>
-                  <div style={{ height: heights[col], borderRadius: '14px 14px 0 0', border: `1px solid ${i === 0 ? 'rgba(120,190,20,0.5)' : C.line}`, borderBottom: 'none', background: i === 0 ? 'linear-gradient(180deg, rgba(182,255,59,0.4), rgba(182,255,59,0.08))' : C.soft, color: i === 0 ? C.green : C.mute, fontSize: 26, fontWeight: 900, paddingTop: 8 }}>{i + 1}</div>
+                  <div style={{ height: heightOf(pl), borderRadius: '14px 14px 0 0', border: `1px solid ${i === 0 ? 'rgba(120,190,20,0.5)' : C.line}`, borderBottom: 'none', background: i === 0 ? 'linear-gradient(180deg, rgba(182,255,59,0.4), rgba(182,255,59,0.08))' : C.soft, color: i === 0 ? C.green : C.mute, fontSize: 26, fontWeight: 900, paddingTop: 8 }}>{pl}</div>
                 </div>
               )
             })}
@@ -123,6 +123,8 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
 export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
   const rows = standings(s)
   const labels = placeLabels(rows)
+  // the awards card already shows Dynamic Duo and On Fire, so this card only adds what they do not say
+  const extra = highlightsNotInAwards(s)
   const badges = awardsByName(s)
   const sum = summarize(s)
   const maxPlayed = Math.max(1, ...rows.map((r) => r.played))
@@ -161,10 +163,9 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
                 ))}
               </tbody>
             </table>
-            {(sum.bestDuo || sum.biggestWin || sum.hotStreak) && (
+            {(extra.length > 0 || sum.biggestWin) && (
               <div style={{ paddingTop: 18, display: 'flex', gap: 10 }}>
-                {sum.bestDuo && <Fact label="BEST DUO" value={join(sum.bestDuo.ids.map((id) => nameOf(s, id)))} sub={`${sum.bestDuo.wins}-${sum.bestDuo.losses} together`} />}
-                {sum.hotStreak && <Fact label="HOT STREAK" value={sum.hotStreak.name} sub={`${sum.hotStreak.longestStreak} wins in a row`} />}
+                {extra.map((h) => <Fact key={h.key} label={h.label.toUpperCase()} value={h.value} sub={h.sub} />)}
                 {sum.biggestWin && <Fact label="BIGGEST WIN" value={`${sum.biggestWin.scoreA}–${sum.biggestWin.scoreB}`} sub={join((sum.biggestWin.winner === 'a' ? sum.biggestWin.a : sum.biggestWin.b).map((id) => nameOf(s, id)))} />}
               </div>
             )}

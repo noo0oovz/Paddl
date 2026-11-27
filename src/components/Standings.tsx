@@ -1,5 +1,5 @@
 import { awardsByName } from '../engine/insights'
-import { standings } from '../engine/stats'
+import { placesOf, standings } from '../engine/stats'
 import type { PlayerStat } from '../engine/stats'
 import type { Session } from '../engine/types'
 import { Empty } from './ui'
@@ -9,16 +9,15 @@ export function medal(i: number): string {
 }
 
 /**
- * What to show in the place column for each row. Players level on wins, losses and points difference share a place (they were
- * only ordered by name before), and a medal goes only to someone who has actually won a game: with no wins there is no podium.
+ * What to show in the place column for each row. The places come from placesOf (the one rule the podium and the share pictures use
+ * too): players who are level share a place, and the next place skips them (1, 2, 2, 2, 2, 6). A medal goes only to someone who has
+ * actually won a game, and a player with no decided game shows a dash.
  */
 export function placeLabels(rows: PlayerStat[]): string[] {
-  let place = 0
+  const places = placesOf(rows)
   return rows.map((r, i) => {
-    const prev = rows[i - 1]
-    if (!prev || prev.wins !== r.wins || prev.losses !== r.losses || prev.diff !== r.diff) place = i + 1
     if (r.wins + r.losses === 0) return '–'
-    return r.wins > 0 && place <= 3 ? medal(place - 1) : String(place)
+    return r.wins > 0 && places[i] <= 3 ? medal(places[i] - 1) : String(places[i])
   })
 }
 

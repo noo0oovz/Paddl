@@ -8,7 +8,8 @@ import { boardStats, etaText, groupWaitMs, longestWait, queueEta, rivalryFor, st
 import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
 import { buzz } from '../lib/haptics'
-import { elapsed, fmtTime, gameIsArmed, join, plural, useNow } from '../lib/util'
+import { UNLOCK_HOLD_MS, elapsed, fmtTime, gameIsArmed, join, plural, useNow } from '../lib/util'
+import { useHold } from '../lib/useHold'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall, Vs } from './art'
 import VoiceSheet from './VoiceSheet'
@@ -20,7 +21,8 @@ import { TIME_MARK_MIN } from '../lib/cues'
 
 /**
  * Big-screen scoreboard and queue board: high contrast, large type. Prop a tablet near the courts or cast the tab
- * to a TV. Tap the winning team on a court to record the result and bring on the next match without leaving.
+ * to a TV. Press and hold the winning team on a court to record the result and bring on the next match without leaving
+ * (a quick touch only shows a hint, so a stray touch can never count a game).
  */
 export default function Board({ s, onClose }: { s: Session; onClose: () => void }) {
   const now = useNow(5000)
@@ -30,10 +32,8 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   // Locked: a bystander or a child cannot record a result by touching the screen. It only lives while the Board is
   // open, so reloading always starts unlocked and nobody can be shut out of their own session.
   const [locked, setLocked] = useState(false)
-  const [hold, setHold] = useState(0) // 0-1: how far the press-and-hold to unlock has got
   // Display mode is the lock plus a quieter screen: no how-to line, because nobody is meant to touch it. Unlocking ends it.
   const [display, setDisplay] = useState(false)
-  const holdRaf = useRef<number | null>(null)
   const [nudge, setNudge] = useState(false)
   const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
@@ -111,14 +111,16 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     timer.current = setTimeout(() => setToast(null), 6000)
   }
 
-  /** Record the win for one side of a court. The court refills from the queue straight away. */
+  /** A press while the Board is locked: say why nothing happens, so it never looks broken. */
+  function nudgeLocked() {
+    setNudge(true)
+    if (nudgeTimer.current) clearTimeout(nudgeTimer.current)
+    nudgeTimer.current = setTimeout(() => setNudge(false), 2500)
+  }
+
+  /** Record the win for one side of a court (called when the hold on that team completes). The court refills from the queue straight away. */
   function win(courtId: string, side: 'a' | 'b') {
-    if (locked) { // say why nothing happened, so it never looks broken
-      setNudge(true)
-      if (nudgeTimer.current) clearTimeout(nudgeTimer.current)
-      nudgeTimer.current = setTimeout(() => setNudge(false), 2500)
-      return
-    }
+    if (locked) { nudgeLocked(); return }
     const c = s.courts.find((x) => x.id === courtId)
     if (!c?.match) return
     if (!gameIsArmed(c.match.startedAt)) return // a double tap landing on the game that has just started
@@ -130,22 +132,8 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   }
 
   /** Unlock takes a deliberate press and hold (about a second), so a stray touch cannot undo the lock. */
-  function startHold() {
-    const t0 = performance.now()
-    const tick = () => {
-      const p = Math.min(1, (performance.now() - t0) / 1000)
-      setHold(p)
-      if (p >= 1) { holdRaf.current = null; setLocked(false); setDisplay(false); setHold(0); return }
-      holdRaf.current = requestAnimationFrame(tick)
-    }
-    holdRaf.current = requestAnimationFrame(tick)
-  }
-  function cancelHold() {
-    if (holdRaf.current) cancelAnimationFrame(holdRaf.current)
-    holdRaf.current = null
-    setHold(0)
-  }
-  useEffect(() => () => { if (holdRaf.current) cancelAnimationFrame(holdRaf.current); if (nudgeTimer.current) clearTimeout(nudgeTimer.current) }, [])
+  const { progress: hold, start: startHold, stop: cancelHold } = useHold(UNLOCK_HOLD_MS, () => { setLocked(false); setDisplay(false) })
+  useEffect(() => () => { if (nudgeTimer.current) clearTimeout(nudgeTimer.current) }, [])
 
   function doUndo() {
     if (undo()) buzz('undo')
@@ -202,7 +190,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         </div>
 
         {s.courts.some((c) => c.match) && !display && (
-          <p className={`mb-3 text-sm font-semibold ${locked ? 'text-amber-300' : 'text-slate-300'}`}>{locked ? '🔒 Locked: touching a team does nothing. Press and hold the lock button to unlock.' : '👆 Tap the winning team to record the result and start the next match.'}</p>
+          <p className={`mb-3 text-sm font-semibold ${locked ? 'text-amber-300' : 'text-slate-300'}`}>{locked ? '🔒 Locked: touching a team does nothing. Press and hold the lock button to unlock.' : '👆 Press and hold the winning team for 1.5 seconds to record the result and start the next match.'}</p>
         )}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -235,6 +223,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
                         locked={locked}
                         onWinA={() => win(c.id, 'a')}
                         onWinB={() => win(c.id, 'b')}
+                        onLockedPress={nudgeLocked}
                       />
                       <button
                         onClick={() => announce(c.id, courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}

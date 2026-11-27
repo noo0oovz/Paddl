@@ -85,11 +85,46 @@ export function standings(s: Session): PlayerStat[] {
   return rankRows(out)
 }
 
+/**
+ * What a player's place is decided by, best first: a smoothed win rate (so a lucky 1-0 does not outrank a solid 5-1; anyone
+ * with no decided game ranks below everyone who has one), then points difference, then wins. Two players with the same three
+ * numbers are TIED. This one rule both orders the list and decides ties, so the table, the podium and the share pictures
+ * cannot disagree about who is level.
+ */
+function rankKey(x: PlayerStat): [number, number, number] {
+  const rate = x.wins + x.losses === 0 ? -1 : (x.wins + 1) / (x.wins + x.losses + 2)
+  return [rate, x.diff, x.wins]
+}
+const sameRank = (x: PlayerStat, y: PlayerStat) => rankKey(x).every((v, i) => Math.abs(v - rankKey(y)[i]) < 1e-9)
+
 function rankRows(rows: PlayerStat[]): PlayerStat[] {
-  // Rank by a smoothed win rate so a lucky 1-0 does not outrank a solid 5-1.
-  // Entries with no decided games always rank below anyone who has played one.
-  const rank = (x: PlayerStat) => (x.wins + x.losses === 0 ? -1 : (x.wins + 1) / (x.wins + x.losses + 2))
-  return [...rows].sort((x, y) => rank(y) - rank(x) || y.diff - x.diff || y.wins - x.wins || y.played - x.played || x.name.localeCompare(y.name))
+  // Games played and name only decide the ORDER inside a tie (so the list is stable); they never split a place.
+  return [...rows].sort((x, y) => {
+    const kx = rankKey(x), ky = rankKey(y)
+    for (let i = 0; i < kx.length; i++) if (Math.abs(ky[i] - kx[i]) > 1e-9) return ky[i] - kx[i]
+    return y.played - x.played || x.name.localeCompare(y.name)
+  })
+}
+
+/**
+ * The place of every row, for a list already sorted best first. Players who are level share a place, and the next place
+ * skips the people before it: 1, 2, 2, 2, 2, 6 (four tied for 2nd, so the next player is 6th, not 3rd).
+ */
+export function placesOf(rows: PlayerStat[]): number[] {
+  const out: number[] = []
+  rows.forEach((r, i) => out.push(i > 0 && sameRank(rows[i - 1], r) ? out[i - 1] : i + 1))
+  return out
+}
+
+/**
+ * Who stands on the podium: everyone in the top three PLACES who has won a game, so a tie for 2nd shows every player
+ * tied for 2nd (and nobody is called 3rd). At most 5 are shown, so a big tie cannot take over the page.
+ */
+export function podiumOf(rows: PlayerStat[], max = 5): { row: PlayerStat; place: number }[] {
+  const places = placesOf(rows)
+  const out: { row: PlayerStat; place: number }[] = []
+  rows.forEach((row, i) => { if (places[i] <= 3 && row.wins > 0 && out.length < max) out.push({ row, place: places[i] }) })
+  return out
 }
 
 /** One row per individual player, ranked. */

@@ -1,5 +1,5 @@
 import type { Match, Session } from './types'
-import { pairKey, playerStandings, standings, type PlayerStat } from './stats'
+import { pairKey, playerStandings, standings, summarize, type PlayerStat } from './stats'
 import { previewQueue } from './queue'
 import { nameOf } from './stats'
 
@@ -242,7 +242,10 @@ export function awards(s: Session): Award[] {
 
   // Iron Man / Iron Woman: most games, then most time on court. Needs a real lead (at least 2 games played).
   const maxPlayed = Math.max(...rows.map((r) => r.played))
-  if (maxPlayed >= 2) {
+  const minPlayed = Math.min(...rows.map((r) => r.played))
+  // When everyone played the same number of games there is no "most games" to award (it used to go to whoever happened to have a few
+  // more seconds on court, and read as a tie of four).
+  if (maxPlayed >= 2 && maxPlayed > minPlayed) {
     const top = rows.filter((r) => r.played === maxPlayed)
     const bestMs = Math.max(...top.map((r) => r.playMs))
     const tied = top.filter((r) => r.playMs === bestMs)
@@ -402,4 +405,22 @@ export function boardStats(s: Session, now = Date.now()): BoardStats {
   const playing = s.players.filter((p) => p.status === 'active').length
   const longest = longestWait(s, waitingIds.map((id) => [id]), now)
   return { games: s.matches.length, playing, waiting: waitingIds.length, longestWaitMs: longest ? longest.ms : null }
+}
+
+/**
+ * The "highlight" tiles (best duo, hot streak) that are NOT already said by an award. The awards list has Dynamic Duo and On Fire,
+ * so showing both told the same thing twice on the results page and on the share pictures.
+ */
+export interface Highlight { key: 'duo' | 'streak'; label: string; value: string; sub: string }
+export function highlightsNotInAwards(s: Session): Highlight[] {
+  const sum = summarize(s)
+  const have = new Set(awards(s).map((a) => a.id))
+  const out: Highlight[] = []
+  if (sum.bestDuo && !have.has('duo')) {
+    out.push({ key: 'duo', label: 'Best duo', value: sum.bestDuo.ids.map((id) => nameOf(s, id)).join(' & '), sub: `${sum.bestDuo.wins}–${sum.bestDuo.losses} together` })
+  }
+  if (sum.hotStreak && !have.has('streak')) {
+    out.push({ key: 'streak', label: 'Hot streak', value: sum.hotStreak.name, sub: `${sum.hotStreak.longestStreak} in a row` })
+  }
+  return out
 }

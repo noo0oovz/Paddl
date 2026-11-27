@@ -48,7 +48,7 @@ export default function Help({ onClose, onTour, onInstall }: { onClose: () => vo
 
         <Topic emoji="📺" title="The Board (for a tablet or TV)">
           <p>Tap <b>Board</b> to show a big, easy-to-read view with every court and who is <b>on deck</b>. Prop up a tablet by the courts so players can see their turn.</p>
-          <p>You can run the whole night from the Board: <b>tap the winning team</b> and the next match goes on. Tapped the wrong team? Tap <b>Undo</b> in the pop-up.</p>
+          <p>You can run the whole night from the Board: <b>press and hold the winning team for about a second and a half</b> and the next match goes on. A quick touch only shows a reminder, so nobody can count a game by brushing the screen. Held the wrong team? Tap <b>Undo</b> in the pop-up.</p>
         </Topic>
 
         <Topic emoji="🔁" title="Swap, remix and fix the queue">
