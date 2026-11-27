@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Crown, Lock, LockOpen, Maximize2, Minimize2, Undo2, Volume2, VolumeX, X } from 'lucide-react'
+import { Check, Crown, Lock, LockOpen, Maximize2, Minimize2, Tv, Undo2, Volume2, VolumeX, X } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { COURT_TAGS } from '../engine/types'
 import { previewQueue, waitingUnits } from '../engine/queue'
 import { finishMatch } from '../engine/session'
-import { etaText, groupWaitMs, longestWait, queueEta, rivalryFor, streakCall, waitText } from '../engine/insights'
+import { boardStats, etaText, groupWaitMs, longestWait, queueEta, rivalryFor, streakCall, waitText } from '../engine/insights'
 import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
 import { buzz } from '../lib/haptics'
-import { elapsed, gameIsArmed, join, useNow } from '../lib/util'
+import { elapsed, fmtTime, gameIsArmed, join, plural, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall, Vs } from './art'
 import VoiceSheet from './VoiceSheet'
@@ -31,6 +31,8 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   // open, so reloading always starts unlocked and nobody can be shut out of their own session.
   const [locked, setLocked] = useState(false)
   const [hold, setHold] = useState(0) // 0-1: how far the press-and-hold to unlock has got
+  // Display mode is the lock plus a quieter screen: no how-to line, because nobody is meant to touch it. Unlocking ends it.
+  const [display, setDisplay] = useState(false)
   const holdRaf = useRef<number | null>(null)
   const [nudge, setNudge] = useState(false)
   const nudgeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -47,6 +49,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const eta = queueEta(s, now)
   const waiting = waitingUnits(s)
   const longest = longestWait(s, waiting.map((u) => u.ids), now)
+  const stats = boardStats(s, now)
 
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -132,7 +135,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     const tick = () => {
       const p = Math.min(1, (performance.now() - t0) / 1000)
       setHold(p)
-      if (p >= 1) { holdRaf.current = null; setLocked(false); setHold(0); return }
+      if (p >= 1) { holdRaf.current = null; setLocked(false); setDisplay(false); setHold(0); return }
       holdRaf.current = requestAnimationFrame(tick)
     }
     holdRaf.current = requestAnimationFrame(tick)
@@ -159,12 +162,22 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-bold tracking-[0.25em] text-accent"><span className="live-dot" /> PADDL · LIVE BOARD</div>
             <div className="truncate text-2xl font-black tracking-tight sm:text-4xl">{s.name}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-base font-semibold text-slate-300 sm:text-lg" aria-label="Session summary">
+              <span className="tabular-nums text-white">{fmtTime(now)}</span>
+              <span>{plural(stats.games, 'game')} played</span>
+              <span>{stats.playing} playing</span>
+              {stats.waiting > 0 && <span>{stats.waiting} waiting</span>}
+              {stats.longestWaitMs !== null && <span className="text-accent">longest wait {Math.floor(stats.longestWaitMs / 60000)} min</span>}
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button onClick={doUndo} disabled={!undoDepth} className={iconBtn} aria-label="Undo last action" title="Undo"><Undo2 size={20} /> <span className="hidden sm:inline">Undo</span></button>
             <button onClick={() => setSound(!sound)} className={iconBtn} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title="Chimes (the beep when a game starts)">
               {sound ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
+            {!locked && (
+              <button onClick={() => { setLocked(true); setDisplay(true) }} className={iconBtn} aria-label="Display mode" title="Display mode: lock the board and hide the how-to line, for a screen on the wall"><Tv size={20} /> <span className="hidden sm:inline">Display</span></button>
+            )}
             {locked ? (
               <button
                 onPointerDown={startHold} onPointerUp={cancelHold} onPointerLeave={cancelHold} onPointerCancel={cancelHold} onBlur={cancelHold}
@@ -188,7 +201,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
           </div>
         </div>
 
-        {s.courts.some((c) => c.match) && (
+        {s.courts.some((c) => c.match) && !display && (
           <p className={`mb-3 text-sm font-semibold ${locked ? 'text-amber-300' : 'text-slate-300'}`}>{locked ? '🔒 Locked: touching a team does nothing. Press and hold the lock button to unlock.' : '👆 Tap the winning team to record the result and start the next match.'}</p>
         )}
 

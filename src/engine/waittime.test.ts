@@ -124,3 +124,26 @@ describe('how the wait is shown', () => {
     expect(longestWait(s, [], T0)).toBeNull()
   })
 })
+
+import { boardStats } from './insights'
+describe('the Board header numbers', () => {
+  it('counts games, people in the session, who is waiting, and the longest real wait', () => {
+    let s = at(T0, () => S.createSession('t', { courts: 1 }, names(10)))
+    const b0 = boardStats(s, T0 + MIN)
+    expect(b0).toEqual({ games: 0, playing: 10, waiting: 6, longestWaitMs: null }) // 4 on court, 6 waiting, no real wait yet
+    expect(boardStats(s, T0 + 8 * MIN).longestWaitMs).toBe(8 * MIN)
+    s = finishFirst(s, T0 + 9 * MIN)
+    const b1 = boardStats(s, T0 + 9 * MIN)
+    expect(b1.games).toBe(1)
+    expect(b1.playing).toBe(10)
+    expect(b1.waiting).toBe(6) // four came off, four went on: still six waiting
+  })
+  it('people on a break are not playing or waiting, and a late joiner counts as waiting', () => {
+    let s = at(T0, () => S.createSession('t', { courts: 1 }, names(10)))
+    const w = waitingUnits(s)[0].ids[0]
+    s = at(T0 + MIN, () => S.setStatus(s, w, 'resting'))
+    expect(boardStats(s, T0 + 2 * MIN)).toMatchObject({ playing: 9, waiting: 5 })
+    s = at(T0 + 3 * MIN, () => S.addPlayer(s, 'Late'))
+    expect(boardStats(s, T0 + 4 * MIN)).toMatchObject({ playing: 10, waiting: 6 })
+  })
+})

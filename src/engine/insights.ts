@@ -387,3 +387,19 @@ export function longestWait(s: Session, groups: string[][], now = Date.now()): {
   const b = best as { index: number; ms: number } | null
   return b && b.ms >= 3 * 60_000 ? b : null // under 3 minutes nobody has really waited: no highlight
 }
+
+/** The numbers shown across the top of the big-screen Board: how the night is going, readable from across the gym. */
+export interface BoardStats {
+  games: number
+  playing: number
+  waiting: number
+  /** Longest current wait in ms, only when it is a real wait (3+ minutes). */
+  longestWaitMs: number | null
+}
+
+export function boardStats(s: Session, now = Date.now()): BoardStats {
+  const waitingIds = s.players.filter((p) => p.status === 'active' && waitMs(s, p.id, now) !== null).map((p) => p.id)
+  const playing = s.players.filter((p) => p.status === 'active').length
+  const longest = longestWait(s, waitingIds.map((id) => [id]), now)
+  return { games: s.matches.length, playing, waiting: waitingIds.length, longestWaitMs: longest ? longest.ms : null }
+}

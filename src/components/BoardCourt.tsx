@@ -41,8 +41,8 @@ export default function BoardCourt({
         {/* the kitchens and the net */}
         <div className="relative grid h-[4.25rem] grid-cols-2 border-y-2 border-slate-300/70 bg-[repeating-linear-gradient(135deg,rgba(148,163,184,0.10)_0_2px,transparent_2px_7px)] sm:h-[4.75rem]" aria-hidden>
           {/* the net is the dashed line across the middle; the KITCHEN labels sit BELOW it, never on it */}
-          <span className="self-end pb-1.5 text-center text-[10px] font-bold tracking-[0.3em] text-slate-400">KITCHEN</span>
-          <span className="self-end pb-1.5 text-center text-[10px] font-bold tracking-[0.3em] text-slate-400">KITCHEN</span>
+          <span className="self-end pb-1.5 text-center text-xs font-bold tracking-[0.3em] text-slate-400">KITCHEN</span>
+          <span className="self-end pb-1.5 text-center text-xs font-bold tracking-[0.3em] text-slate-400">KITCHEN</span>
           <span className="absolute inset-x-0 top-[38%] h-0 border-t-[3px] border-dashed border-white/90" />
           <span className="absolute top-[38%] -left-0.5 h-3 w-3 -translate-y-1/2 rounded-full bg-white" />
           <span className="absolute top-[38%] -right-0.5 h-3 w-3 -translate-y-1/2 rounded-full bg-white" />
