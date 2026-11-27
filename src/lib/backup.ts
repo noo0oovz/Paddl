@@ -48,6 +48,7 @@ export function sessionProblem(s: unknown): string | null {
   for (const p of s.players as unknown[]) {
     if (!isObj(p) || !isStr(p.id) || !isStr(p.name) || !isNum(p.level) || !['active', 'resting', 'left'].includes(p.status as string)) return 'a player is malformed'
     if (!isNum(p.baseGames) || !isNum(p.lastPlayed) || !Array.isArray(p.intervals)) return 'a player is malformed'
+    if (p.joinedAt !== undefined && !isNum(p.joinedAt)) return 'a player has a bad join time' // optional, but a bad one would show as "NaN min"
     // The stats screens destructure every interval as [from, to]; one bad entry crashed Standings.
     if (!(p.intervals as unknown[]).every((iv) => Array.isArray(iv) && iv.length === 2 && isNum(iv[0]) && (iv[1] === null || isNum(iv[1])))) return 'a player has a bad time range'
     known.add(p.id)

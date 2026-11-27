@@ -172,14 +172,23 @@ describe('sessions saved by older versions of the app still load', () => {
   function oldStyle(): Record<string, any> {
     const s = JSON.parse(JSON.stringify(createSession('Old', { courts: 2 }, names(8)))) as Record<string, any>
     for (const c of s.courts) { delete c.tags; if (c.match) delete c.match.gid }
-    for (const p of s.players) { delete p.prio; delete p.prioAt }
-    delete s.remix; delete s.fresh
+    for (const p of s.players) { delete p.prio; delete p.prioAt; delete p.joinedAt }
+    delete s.remix; delete s.fresh; delete s.pinned
     delete s.config.challengerCourt
     return s
   }
 
   it('is accepted without gid, tags, prio, remix, challengerCourt', () => {
     expect(sessionProblem(oldStyle())).toBeNull()
+  })
+
+  it('a join time is optional, but a wrong one is flagged (it would show as "NaN min")', () => {
+    const base = () => JSON.parse(JSON.stringify(createSession('J', { courts: 1 }, names(6)))) as Record<string, any>
+    expect(sessionProblem(base()), 'saved with a join time').toBeNull()
+    for (const bad of ['yesterday', null, {}, NaN]) {
+      const s = base(); s.players[0].joinedAt = bad
+      expect(sessionProblem(s), JSON.stringify(bad)).not.toBeNull()
+    }
   })
 
   it('is accepted when games have no length or streak recorded', () => {

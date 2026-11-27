@@ -153,6 +153,19 @@ body::before {
   @apply btn bg-red-600 text-white hover:bg-red-700;
   box-shadow: 0 6px 20px -8px rgba(240, 54, 74, 0.6);
 }
+/* A compact control that still has a 44px touch area: the invisible ::after grows the HIT area to at least 44 x 44 around the
+   control without changing its size or moving anything. Use it where the look must stay small (court headers, tight rows). */
+@utility hit {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
 @utility btn-ghost {
   @apply btn text-slate-600 hover:bg-slate-900/5 dark:text-slate-300 dark:hover:bg-white/10;
 }

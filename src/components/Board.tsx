@@ -4,7 +4,7 @@ import type { Session } from '../engine/types'
 import { COURT_TAGS } from '../engine/types'
 import { previewQueue, waitingUnits } from '../engine/queue'
 import { finishMatch } from '../engine/session'
-import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
+import { etaText, groupWaitMs, longestWait, queueEta, rivalryFor, streakCall, waitText } from '../engine/insights'
 import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
 import { buzz } from '../lib/haptics'
@@ -46,6 +46,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const eta = queueEta(s, now)
   const waiting = waitingUnits(s)
+  const longest = longestWait(s, waiting.map((u) => u.ids), now)
 
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -292,11 +293,13 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
               <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
                 <h2 className="mb-3 text-lg font-bold tracking-wider text-slate-400">🕘 WAITING LINE</h2>
                 <div className="flex flex-wrap gap-2">
-                  {waiting.map((u) => {
+                  {waiting.map((u, i) => {
                     const t = etaText(eta.get(u.ids[0]))
+                    const w = waitText(groupWaitMs(s, u.ids, now))
                     return (
-                      <span key={u.key} className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-lg font-semibold">
+                      <span key={u.key} className={`rounded-full border px-4 py-2 text-lg font-semibold ${longest?.index === i ? 'border-accent/70 bg-accent/10' : 'border-white/10 bg-white/5'}`}>
                         {u.ids.map((id) => nameOf(s, id)).join(' & ')}
+                        {w && <span className="ml-2 text-sm font-medium text-slate-300">{w}</span>}
                         {t && <span className="ml-2 text-sm font-medium text-slate-400">{t}</span>}
                       </span>
                     )

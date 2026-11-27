@@ -29,6 +29,7 @@ function addPlayerRaw(s: Session, name: string, level: number): Player {
     status: 'active',
     baseGames: 0,
     lastPlayed: s.seq,
+    joinedAt: Date.now(),
     intervals: [[s.seq, null]],
   }
   s.players.push(p)
@@ -320,6 +321,7 @@ export function setStatus(s: Session, id: string, status: Player['status']): Ses
       p.status = status
       if (status === 'active') {
         p.intervals.push([d.seq, null])
+        p.joinedAt = Date.now() // time on a break is not time spent waiting for a court
         // Host choice: "back" makes a returning player wait behind everyone already in line. It is a one-time skip
         // (it lapses after the next match is drawn), so nobody can be buried for the rest of the night.
         if (d.config.breakReturn === 'back') {

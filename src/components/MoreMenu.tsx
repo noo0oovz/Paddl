@@ -24,7 +24,7 @@ export default function MoreMenu({ onHelp, onHome, onData, onInstall }: { onHelp
 
   return (
     <div ref={ref} className="relative">
-      <button className="btn-soft !min-h-9 !px-2.5" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="More options" title="More"><MoreHorizontal size={18} /></button>
+      <button className="btn-soft hit !min-h-9 !px-2.5" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="More options" title="More"><MoreHorizontal size={18} /></button>
       {open && (
         <div className="paddl-in absolute right-0 z-30 mt-2 w-64 space-y-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-slate-900">
           <div className="label !mb-1">Theme</div>

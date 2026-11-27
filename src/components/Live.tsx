@@ -3,7 +3,7 @@ import { ArrowDownToLine, Megaphone, Settings2, Trash2, ArrowUpToLine, Ban, Cloc
 import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, playedOf, nameOf } from '../engine/stats'
-import { etaIn, etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
+import { etaIn, etaText, groupWaitMs, longestWait, queueEta, rivalryFor, streakCall, waitText } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
 import { useConfirm } from './Confirm'
@@ -103,6 +103,7 @@ export default function Live({ s }: { s: Session }) {
   const counts = countMatches(s.matches)
   const waiting = waitingUnits(s)
   const waitingPlayers = waiting.reduce((n, u) => n + u.ids.length, 0)
+  const longest = longestWait(s, waiting.map((u) => u.ids), now)
   const need = unitsNeeded(s.config.format)
   const upcoming = previewQueue(s, 4)
   const eta = queueEta(s, now)
@@ -122,13 +123,13 @@ export default function Live({ s }: { s: Session }) {
           {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'} played · {s.players.filter((p) => p.status === 'active').length} playing
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-soft !min-h-10 !px-3" onClick={() => setVoiceOpen(true)} aria-label="Announcer voice settings" title="Choose the announcer voice"><Megaphone size={18} /></button>
-          <button className="btn-soft !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title={sound ? 'Chimes on (tap to mute). This is the beep when a game starts; use the Call out buttons to announce players.' : 'Chimes off (tap to turn on)'}>
-            {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
+          <button className="btn-soft hit !min-h-10 !px-3" onClick={() => setVoiceOpen(true)} aria-label="Announcer voice settings" title="Choose the announcer voice"><Megaphone size={18} /> <span className="hidden min-[480px]:inline">Voice</span></button>
+          <button className="btn-soft hit !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title={sound ? 'Chimes on (tap to mute). This is the beep when a game starts; use the Call out buttons to announce players.' : 'Chimes off (tap to turn on)'}>
+            {sound ? <Volume2 size={18} /> : <VolumeX size={18} />} <span className="hidden min-[480px]:inline">{sound ? 'Chimes on' : 'Chimes off'}</span>
           </button>
-          <button className="btn-soft !min-h-10" onClick={() => setBoard(true)} title="Big-screen board for a tablet or TV"><Monitor size={18} /> <span className="hidden min-[420px]:inline">Board</span></button>
-          <button className="btn-primary !min-h-10" onClick={() => setAdding(true)} aria-label={s.config.format === 'teams' ? 'Add a late team' : 'Add a late player'} title="Someone just arrived? Add them without ending the session"><UserPlus size={18} /> <span className="hidden min-[360px]:inline">{s.config.format === 'teams' ? 'Add team' : 'Add'}</span></button>
-          <button className="btn-soft !min-h-10" onClick={() => setPeople(true)} title="Breaks, renames and who has left"><Users size={18} /> <span className="hidden min-[420px]:inline">Players</span></button>
+          <button className="btn-soft hit !min-h-10" onClick={() => setBoard(true)} title="Big-screen board for a tablet or TV"><Monitor size={18} /> <span className="hidden min-[420px]:inline">Board</span></button>
+          <button className="btn-primary hit !min-h-10" onClick={() => setAdding(true)} aria-label={s.config.format === 'teams' ? 'Add a late team' : 'Add a late player'} title="Someone just arrived? Add them without ending the session"><UserPlus size={18} /> <span className="hidden min-[360px]:inline">{s.config.format === 'teams' ? 'Add team' : 'Add'}</span></button>
+          <button className="btn-soft hit !min-h-10" onClick={() => setPeople(true)} title="Breaks, renames and who has left"><Users size={18} /> <span className="hidden min-[420px]:inline">Players</span></button>
         </div>
       </div>
 
@@ -136,7 +137,7 @@ export default function Live({ s }: { s: Session }) {
         <button
           type="button"
           onClick={() => document.getElementById('next-match')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-          className="sticky top-14 z-10 mb-3 flex w-full items-center gap-2 rounded-xl border border-accent/30 bg-white/90 px-3 py-2 text-left text-sm shadow-sm backdrop-blur lg:hidden dark:bg-slate-950/90"
+          className="sticky top-14 z-10 mb-1.5 flex w-full items-center gap-2 rounded-xl border border-accent/30 bg-white/90 px-3 py-2 text-left text-sm shadow-sm backdrop-blur lg:hidden dark:bg-slate-950/90"
           aria-label="Show the next match"
         >
           <span className="shrink-0 text-xs font-extrabold tracking-wide text-brand uppercase">Up next</span>
@@ -144,6 +145,19 @@ export default function Live({ s }: { s: Session }) {
             {join(nextUp.a.map((id) => nameOf(s, id)))}{nextUp.b ? ` vs ${join(nextUp.b.map((id) => nameOf(s, id)))}` : ' challenge the winners'}
             {etaText(eta.get(nextUp.a[0])) && <span className="block text-xs font-normal text-slate-500 dark:text-slate-400">{etaText(eta.get(nextUp.a[0]))}</span>}
           </span>
+        </button>
+      )}
+
+      {waiting.length > 0 && (
+        <button
+          type="button"
+          onClick={() => document.getElementById('waiting-line')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className="hit mb-3 flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white/60 px-3 py-1.5 text-left text-xs font-semibold text-slate-600 lg:hidden dark:border-white/10 dark:bg-white/5 dark:text-slate-300"
+          aria-label="Show the waiting line"
+        >
+          <Users size={14} className="shrink-0" />
+          <span>{plural(waitingPlayers, 'player')} waiting</span>
+          {longest && <span className="ml-auto text-brand">longest {Math.floor(longest.ms / 60000)} min</span>}
         </button>
       )}
 
@@ -157,7 +171,7 @@ export default function Live({ s }: { s: Session }) {
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
             <span className="text-slate-500">{s.courts.length} {s.courts.length === 1 ? 'court' : 'courts'}</span>
-            <button className="btn-soft !min-h-10" onClick={() => { updateActive((x) => addCourt(x)); flash('Court added. It fills from the queue straight away.') }} disabled={s.courts.length >= MAX_COURTS}>
+            <button className="btn-soft hit !min-h-10" onClick={() => { updateActive((x) => addCourt(x)); flash('Court added. It fills from the queue straight away.') }} disabled={s.courts.length >= MAX_COURTS}>
               <Plus size={16} /> Add court
             </button>
             {showHints && <span className="text-xs text-slate-500 dark:text-slate-400">To remove one, tap its <Settings2 size={12} className="inline" /> icon.</span>}
@@ -166,7 +180,7 @@ export default function Live({ s }: { s: Session }) {
         </div>
 
         <aside className="min-w-0 space-y-4">
-          <section className="card p-4">
+          <section id="waiting-line" className="card scroll-mt-28 p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-bold">Waiting line</h2>
               <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold dark:bg-slate-800">{waitingPlayers} waiting</span>
@@ -176,13 +190,14 @@ export default function Live({ s }: { s: Session }) {
             )}
             {waiting.length > 0 && (
               <div>
-                <div className="mb-1.5 text-xs font-semibold text-slate-500">Games played · when you are up (tap a name to move)</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {waiting.map((u) => (
-                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className="rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700">
+                <div className="mb-1.5 text-xs font-semibold text-slate-500">Games played · how long waited · when up (tap a name to move)</div>
+                <div className="flex flex-wrap gap-x-1.5 gap-y-3">
+                  {waiting.map((u, i) => (
+                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className={`hit rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 ${longest?.index === i ? 'ring-2 ring-accent/70' : ''}`} title={longest?.index === i ? 'Has waited the longest' : undefined}>
                       {u.pri < 0 && <span title="Playing next">⏭ </span>}
                       {u.pri > 0 && <span title="Sent to back">⏬ </span>}
                       {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, playedOf(p, counts)), 0)}</span>
+                      {waitText(groupWaitMs(s, u.ids, now)) && <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">{waitText(groupWaitMs(s, u.ids, now))}</span>}
                       {etaText(eta.get(u.ids[0])) && <span className="ml-1 text-xs font-normal text-green-700 dark:text-green-400">{etaText(eta.get(u.ids[0]))}</span>}
                     </button>
                   ))}
@@ -196,7 +211,7 @@ export default function Live({ s }: { s: Session }) {
               <h2 className="mb-2 flex items-center gap-2 font-bold"><Moon size={16} /> On a break</h2>
               <div className="flex flex-wrap gap-2">
                 {resting.map((p) => (
-                  <button key={p.id} className="btn-soft !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'active'))}>
+                  <button key={p.id} className="btn-soft hit !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'active'))}>
                     {p.name} <span className="text-green-700 dark:text-green-400">Back</span>
                   </button>
                 ))}
@@ -214,7 +229,7 @@ export default function Live({ s }: { s: Session }) {
         <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 top-[3.75rem] z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:top-auto md:bottom-4">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Trophy size={15} /></span>
           <span className="min-w-0 flex-1 text-sm leading-snug font-bold [overflow-wrap:anywhere]">{won.text}</span>
-          <button className="btn-toast !min-h-9 shrink-0 !px-3" onClick={() => { if (undoIfUnchanged(won.at)) buzz('undo'); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
+          <button className="btn-toast hit !min-h-9 shrink-0 !px-3" onClick={() => { if (undoIfUnchanged(won.at)) buzz('undo'); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
         </div>
       )}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
@@ -252,11 +267,11 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
         <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-white/10" />
         <span aria-hidden title={m ? `${Math.floor(mins)} min on court` : undefined} className={`absolute top-0 left-0 h-1 transition-[width] duration-1000 ${barColor}`} style={{ width: `${pct}%` }} />
         <h2 className="font-bold">{c.name}</h2>
-        <button onClick={onTags} className="ml-2 grid h-8 w-8 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} settings`} title="Court settings: badges and remove"><Settings2 size={15} /></button>
+        <button onClick={onTags} className="hit ml-2 grid h-8 w-8 place-items-center rounded-full bg-white/15 hover:bg-white/25" aria-label={`${c.name} settings`} title="Court settings: badges and remove"><Settings2 size={15} /></button>
         {m && (
           <button
             onClick={() => onAnnounce(courtCall(c.name, m.a.map((id) => nameOf(s, id)), m.b.map((id) => nameOf(s, id))))}
-            className={`ml-1.5 grid h-8 w-8 place-items-center rounded-full ${speaking ? 'speaking-pulse bg-accent text-accent-ink' : 'bg-white/15 hover:bg-white/25'}`}
+            className={`hit ml-3 grid h-8 w-8 place-items-center rounded-full ${speaking ? 'speaking-pulse bg-accent text-accent-ink' : 'bg-white/15 hover:bg-white/25'}`}
             aria-label={speaking ? `Stop announcing ${c.name}` : `Call out ${c.name}`}
             aria-pressed={speaking}
             title={speaking ? 'Calling out the players. Tap to stop.' : 'Call out the players on this court'}
@@ -303,8 +318,8 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
           </div>
           {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           <div className="mt-3 flex gap-2">
-            <button className="btn-soft flex-1 !min-h-9" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
-            <button className="btn-soft flex-1 !min-h-9" onClick={onRemix} title="Reshuffle this game: the four on court go back to the line and a different four are picked" aria-label={`Remix ${c.name}`}>
+            <button className="btn-soft hit flex-1 !min-h-9" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
+            <button className="btn-soft hit flex-1 !min-h-9" onClick={onRemix} title="Reshuffle this game: the four on court go back to the line and a different four are picked" aria-label={`Remix ${c.name}`}>
               <Shuffle size={16} /> Reshuffle
             </button>
           </div>
@@ -564,7 +579,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
             <li key={p.id} className="flex items-center gap-2 py-2">
               <div className="min-w-0 flex-1">
                 <button
-                  className="block min-h-9 w-full truncate text-left font-semibold leading-9"
+                  className="block min-h-11 w-full truncate text-left font-semibold leading-[2.75rem]"
                   title="Tap to rename"
                   onClick={() => {
                     const n = prompt('Rename player', p.name)
@@ -585,9 +600,9 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                 </select>
               )}
               {p.status === 'active' ? (
-                <button className="btn-soft !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'resting'))}><Moon size={14} /> Break</button>
+                <button className="btn-soft hit !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'resting'))}><Moon size={14} /> Break</button>
               ) : (
-                <button className="btn-soft !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'active'))}><Plus size={14} /> Back in</button>
+                <button className="btn-soft hit !min-h-9 !px-3" onClick={() => updateActive((x) => setStatus(x, p.id, 'active'))}><Plus size={14} /> Back in</button>
               )}
             </li>
           ))}
@@ -622,7 +637,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-slate-500 sm:inline">{freeCourts ? 'starting on a free court' : 'when a court frees up'}</span>
           {next && (
-            <button className="btn-soft !min-h-9 !px-3" onClick={onRemix} title="Redraw the next match: different partners and opponents from the people already waiting" aria-label="Redraw next match">
+            <button className="btn-soft hit !min-h-9 !px-3" onClick={onRemix} title="Redraw the next match: different partners and opponents from the people already waiting" aria-label="Redraw next match">
               <Shuffle size={16} /> Redraw next
             </button>
           )}
@@ -692,7 +707,7 @@ function TeamBox({ s, ids, onPick, onSwap, canSwap }: { s: Session; ids: string[
           {canSwap && (
             <button
               onClick={() => onSwap(id)}
-              className="grid w-10 shrink-0 place-items-center border-l border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-green-700 dark:border-slate-700 dark:hover:bg-slate-700"
+              className="grid w-11 shrink-0 place-items-center border-l border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-green-700 dark:border-slate-700 dark:hover:bg-slate-700"
               aria-label={`Swap ${nameOf(s, id)} out`}
               title="Swap out: next in line steps up"
             >

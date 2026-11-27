@@ -7,7 +7,7 @@ export default function UndoButton({ full = false }: { full?: boolean }) {
   const { undo: depth } = useData()
   return (
     <button
-      className={`btn-soft !min-h-9 ${full ? '!px-3 w-full justify-start' : '!px-2.5 min-[420px]:!px-3'}`}
+      className={`btn-soft hit !min-h-9 ${full ? '!px-3 w-full justify-start' : '!px-2.5 min-[420px]:!px-3'}`}
       onClick={() => { if (undo()) buzz('undo') }}
       disabled={!depth}
       aria-label={`Undo last action${depth ? ` (${depth} available)` : ''}`}

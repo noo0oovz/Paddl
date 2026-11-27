@@ -19,7 +19,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
       >
         <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-2">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button className="btn-ghost !min-h-9 !px-2" onClick={onClose} aria-label="Close">
+          <button className="btn-ghost hit !min-h-9 !px-2" onClick={onClose} aria-label="Close">
             <X size={20} />
           </button>
         </div>

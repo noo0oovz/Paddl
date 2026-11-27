@@ -15,6 +15,27 @@ export function avgGameMs(s: Session): number {
   return recent[Math.floor(recent.length / 2)] // median: one marathon game should not skew it
 }
 
+/**
+ * How long this player has been waiting for a court, in ms: since they last came off a court, or (if they have not played)
+ * since they joined or came back from a break. Returns null for anyone who is not waiting (on a court, on a break, left).
+ * Sessions saved before `joinedAt` existed fall back to the start of the session.
+ */
+export function waitMs(s: Session, playerId: string, now = Date.now()): number | null {
+  const p = s.players.find((x) => x.id === playerId)
+  if (!p || p.status !== 'active') return null
+  if (s.courts.some((c) => (c.match && [...c.match.a, ...c.match.b].includes(playerId)) || c.hold?.ids.includes(playerId))) return null
+  const joined = p.joinedAt ?? s.createdAt
+  let last = joined
+  for (const m of s.matches) if (m.at > last && (m.a.includes(playerId) || m.b.includes(playerId))) last = m.at
+  return Math.max(0, now - last)
+}
+
+/** How long a pair (a fixed team) has been waiting: a team is only ready once BOTH are free, so it is the shorter of the two waits. */
+export function groupWaitMs(s: Session, ids: string[], now = Date.now()): number | null {
+  const w = ids.map((id) => waitMs(s, id, now)).filter((x): x is number => x !== null)
+  return w.length ? Math.min(...w) : null
+}
+
 export interface Eta {
   games: number // how many court-turns until this player is on
   ms: number // rough minutes until then
@@ -345,4 +366,24 @@ function opponentsOf(s: Session, id: string): string[] {
     else if (m.b.includes(id)) out.push(...m.a)
   }
   return out
+}
+
+/** "waited 8 min" for the waiting line. Nothing under a minute (it would flicker on every game), and hours past an hour. */
+export function waitText(ms: number | null): string | null {
+  if (ms === null) return null
+  const m = Math.floor(ms / 60_000)
+  if (m < 1) return null
+  if (m < 60) return `waited ${m} min`
+  return `waited ${Math.floor(m / 60)} h ${m % 60} min`
+}
+
+/** Who has waited longest among these units, and whether it is worth pointing out (a real gap, not a tie in the first minutes). */
+export function longestWait(s: Session, groups: string[][], now = Date.now()): { index: number; ms: number } | null {
+  let best: { index: number; ms: number } | null = null
+  groups.forEach((ids, index) => {
+    const ms = groupWaitMs(s, ids, now)
+    if (ms !== null && (!best || ms > best.ms)) best = { index, ms }
+  })
+  const b = best as { index: number; ms: number } | null
+  return b && b.ms >= 3 * 60_000 ? b : null // under 3 minutes nobody has really waited: no highlight
 }

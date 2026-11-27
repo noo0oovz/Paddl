@@ -106,14 +106,14 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/75 px-4 py-2 backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/70">
-          <button className="min-w-0 text-left" onClick={() => openSession(null)}>
+          <button className="hit min-w-0 py-1 text-left" onClick={() => openSession(null)}>
             <div className="truncate text-base font-extrabold leading-tight" title={s.name}>{s.name}</div>
             <div className="truncate text-xs text-slate-500">{MODE_INFO[s.config.mode].label}</div>
           </button>
           <div className="flex shrink-0 items-center gap-1">
             <UndoButton />
             <MoreMenu onHelp={onHelp} onHome={() => openSession(null)} onData={onData} onInstall={onInstall} />
-            <button className="btn-danger !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
+            <button className="btn-danger hit !min-h-9 !px-3" onClick={finish}><Flag size={16} /> End</button>
           </div>
         </header>
 
