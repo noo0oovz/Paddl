@@ -193,7 +193,7 @@ export default function Live({ s }: { s: Session }) {
                 <div className="mb-1.5 text-xs font-semibold text-slate-500">Games played · how long waited · when up (tap a name to move)</div>
                 <div className="flex flex-wrap gap-x-1.5 gap-y-3">
                   {waiting.map((u, i) => (
-                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className={`hit rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 ${longest?.index === i ? 'ring-2 ring-accent/70' : ''}`} title={longest?.index === i ? 'Has waited the longest' : undefined}>
+                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className={`chip ${longest?.index === i ? 'ring-2 ring-accent/70' : ''}`} title={longest?.index === i ? 'Has waited the longest' : undefined}>
                       {u.pri < 0 && <span title="Playing next">⏭ </span>}
                       {u.pri > 0 && <span title="Sent to back">⏬ </span>}
                       {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, playedOf(p, counts)), 0)}</span>
@@ -237,6 +237,37 @@ export default function Live({ s }: { s: Session }) {
       {waitFor && <WaitSheet s={s} id={waitFor} onClose={() => setWaitFor(null)} />}
       {subFor && <SubSheet s={s} courtId={subFor.court} outId={subFor.id} onClose={() => setSubFor(null)} />}
     </div>
+  )
+}
+
+/** Rename a player in the app's own dialog (the browser's prompt looks out of place and cannot explain why a name is refused). */
+function RenameSheet({ s, id, onClose }: { s: Session; id: string; onClose: () => void }) {
+  const p = s.players.find((x) => x.id === id)
+  const [text, setText] = useState(p?.name ?? '')
+  const input = useRef<HTMLInputElement>(null)
+  useEffect(() => { input.current?.select() }, [])
+  if (!p) return null
+  const clean = text.trim().replace(/s+/g, ' ')
+  const same = clean === p.name
+  const taken = !same && !!clean && nameTaken(s, clean, p.id)
+  const problem = !clean ? 'A name cannot be empty.' : taken ? `${clean} is already in this session.` : null
+  function save() {
+    if (problem) return
+    if (!same) updateActive((x) => renamePlayer(x, p!.id, clean.slice(0, 30)))
+    onClose()
+  }
+  return (
+    <Sheet title="Rename player" onClose={onClose}>
+      <div className="space-y-3">
+        <label className="label" htmlFor="rename">Name</label>
+        <input id="rename" ref={input} className="input" value={text} maxLength={30} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (isEnter(e)) { e.preventDefault(); save() } }} autoCapitalize="words" />
+        {problem && <p role="alert" className="text-sm font-medium text-red-600 dark:text-red-400">{problem}</p>}
+        <div className="grid grid-cols-2 gap-2">
+          <button className="btn-soft !min-h-12" onClick={onClose}>Cancel</button>
+          <button className="btn-primary !min-h-12" onClick={save} disabled={!!problem}>{same ? 'Done' : 'Save'}</button>
+        </div>
+      </div>
+    </Sheet>
   )
 }
 
@@ -316,7 +347,7 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
               <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.b.map((id) => nameOf(s, id)))} won</span>
             </button>
           </div>
-          {riv && <p className="mt-3 rounded-lg bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
+          {riv && <p className="mt-3 rounded-xl bg-sky-100 px-3 py-1.5 text-center text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           <div className="mt-3 flex gap-2">
             <button className="btn-soft hit flex-1 !min-h-9" onClick={onScore} title="Enter the score, or mark no contest / cancel">Score…</button>
             <button className="btn-soft hit flex-1 !min-h-9" onClick={onRemix} title="Reshuffle this game: the four on court go back to the line and a different four are picked" aria-label={`Remix ${c.name}`}>
@@ -407,7 +438,7 @@ function ScoreSheet({ s, court, onClose }: { s: Session; court: Court; onClose: 
           </label>
           <label className="block">
             <span className="label truncate">{nameB}</span>
-            <input inputMode="numeric" pattern="[0-9]*" className="input text-center text-2xl font-bold" value={b} onChange={(e) => setB(e.target.value.replace(/\D/g, '').slice(0, 2))} onKeyDown={(e) => e.key === 'Enter' && submitScore()} />
+            <input inputMode="numeric" pattern="[0-9]*" className="input text-center text-2xl font-bold" value={b} onChange={(e) => setB(e.target.value.replace(/\D/g, '').slice(0, 2))} onKeyDown={(e) => { if (isEnter(e)) { e.preventDefault(); submitScore() } }} />
           </label>
         </div>
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
@@ -522,7 +553,7 @@ function AddPlayerSheet({ s, onClose }: { s: Session; onClose: () => void }) {
         {s.config.mode === 'skill' && (
           <label className="flex items-center justify-between gap-3 text-sm font-semibold">
             Skill level
-            <select className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 dark:border-slate-600 dark:bg-slate-900" value={level} onChange={(e) => setLevelState(Number(e.target.value))}>
+            <select className="select" value={level} onChange={(e) => setLevelState(Number(e.target.value))}>
               {[2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5].map((l) => <option key={l} value={l}>{l.toFixed(1)}</option>)}
             </select>
           </label>
@@ -546,6 +577,7 @@ function AddPlayerSheet({ s, onClose }: { s: Session; onClose: () => void }) {
 }
 
 function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
+  const [renaming, setRenaming] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [name2, setName2] = useState('')
   const teams = s.config.format === 'teams'
@@ -562,6 +594,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
   }
 
   return (
+    <>
     <Sheet title="Players" onClose={onClose}>
       <div className="space-y-4">
         <div>
@@ -581,12 +614,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                 <button
                   className="block min-h-11 w-full truncate text-left font-semibold leading-[2.75rem]"
                   title="Tap to rename"
-                  onClick={() => {
-                    const n = prompt('Rename player', p.name)
-                    if (!n || n.trim() === p.name) return
-                    if (nameTaken(s, n, p.id)) { alert(`${n.trim()} is already in this session. Pick a different name.`); return }
-                    updateActive((x) => renamePlayer(x, p.id, n.trim().slice(0, 30)))
-                  }}
+                  onClick={() => setRenaming(p.id)}
                 >
                   {p.name}
                 </button>
@@ -595,7 +623,7 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                 </div>
               </div>
               {s.config.mode === 'skill' && p.status === 'active' && (
-                <select aria-label={`${p.name} level`} className="rounded-lg border border-slate-300 bg-white px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-900" value={p.level} onChange={(e) => updateActive((x) => setLevel(x, p.id, Number(e.target.value)))}>
+                <select aria-label={`${p.name} level`} className="select text-xs" value={p.level} onChange={(e) => updateActive((x) => setLevel(x, p.id, Number(e.target.value)))}>
                   {[2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5].map((l) => <option key={l} value={l}>{l.toFixed(1)}</option>)}
                 </select>
               )}
@@ -610,6 +638,8 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
         {s.players.length === 0 && <Empty title="No players yet" />}
       </div>
     </Sheet>
+    {renaming && <RenameSheet s={s} id={renaming} onClose={() => setRenaming(null)} />}
+    </>
   )
 }
 
@@ -679,7 +709,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
         return (
           <>
             {t && !freeCourts && <p className="mt-2 text-sm font-semibold text-green-700 dark:text-green-400">⏱ Up in {t}</p>}
-            {riv && <p className="mt-2 rounded-lg bg-sky-100 px-3 py-1.5 text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
+            {riv && <p className="mt-2 rounded-xl bg-sky-100 px-3 py-1.5 text-sm font-semibold text-sky-800 dark:bg-sky-950 dark:text-sky-300">{riv.text}</p>}
           </>
         )
       })()}
@@ -796,7 +826,9 @@ function TagSheet({ s, courtId, onClose, onNote }: { s: Session; courtId: string
                 <span className="block font-bold">{COURT_TAGS[tag].label}</span>
                 <span className="block text-xs text-slate-500 dark:text-slate-400">{COURT_TAGS[tag].hint}</span>
               </span>
-              <span className={`text-sm font-bold ${on ? 'text-green-700 dark:text-green-400' : 'text-slate-400'}`}>{on ? 'On' : 'Off'}</span>
+              <span aria-hidden className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? 'bg-accent shadow-[0_0_14px_rgba(182,255,59,0.55)]' : 'bg-slate-300 dark:bg-slate-700'}`}>
+                <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${on ? 'left-[22px]' : 'left-0.5'}`} />
+              </span>
             </button>
           )
         })}

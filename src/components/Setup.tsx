@@ -168,7 +168,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
             <div className="label !mb-0">{isTeams ? `Teams (${pairs.length})` : `Players (${players.length})`}</div>
             {problem && <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">{problem}</div>}
           </div>
-          {note && <div role="status" className="mb-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">{note}</div>}
+          {note && <div role="status" className="mb-2 rounded-xl bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">{note}</div>}
 
           {isTeams ? (
             <div className="space-y-2">
@@ -209,14 +209,14 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
               {suggestions.length > 0 && (
                 <div className="mt-3">
                   <div className="mb-1.5 text-xs font-semibold text-slate-500">Regulars</div>
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-x-1.5 gap-y-3">
                     {suggestions.map((r) => (
-                      <button key={r.name} className="rounded-full border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800" onClick={() => setPlayers((p) => [...p, { name: r.name, level: r.level }])}>
+                      <button key={r.name} className="chip" onClick={() => setPlayers((p) => [...p, { name: r.name, level: r.level }])}>
                         + {r.name}
                       </button>
                     ))}
                     {suggestions.length > 1 && (
-                      <button className="rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800 dark:bg-green-950 dark:text-green-300" onClick={() => setPlayers((p) => [...p, ...suggestions.map((r) => ({ name: r.name, level: r.level }))])}>
+                      <button className="chip-accent" onClick={() => setPlayers((p) => [...p, ...suggestions.map((r) => ({ name: r.name, level: r.level }))])}>
                         Add all
                       </button>
                     )}
@@ -230,7 +230,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                     {skill && (
                       <select
                         aria-label={`${p.name} level`}
-                        className="rounded-lg border border-slate-300 bg-white px-1 py-1 text-xs dark:border-slate-600 dark:bg-slate-900"
+                        className="select -my-1.5 text-xs"
                         value={p.level}
                         onChange={(e) => setPlayers((arr) => arr.map((x, j) => (j === i ? { ...x, level: Number(e.target.value) } : x)))}
                       >

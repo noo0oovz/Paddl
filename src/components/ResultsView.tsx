@@ -207,7 +207,7 @@ export function HistorySection({ s }: { s: Session }) {
             <li key={m.id} className="flex items-center gap-2 border-t border-slate-100 px-4 py-2.5 first:border-t-0 dark:border-white/5">
               <span className="w-7 shrink-0 text-xs font-black text-slate-400">#{m.seq}</span>
               <span className={`min-w-0 flex-1 truncate text-right text-sm ${m.winner === 'a' ? 'font-black' : 'text-slate-500 dark:text-slate-400'}`}>{join(m.a.map((id) => nameOf(s, id)))}</span>
-              <span className="min-w-[3.6rem] shrink-0 rounded-lg bg-slate-900/5 px-2 py-1 text-center text-xs font-black tabular-nums dark:bg-white/10">
+              <span className="min-w-[3.6rem] shrink-0 rounded-xl bg-slate-900/5 px-2 py-1 text-center text-xs font-black tabular-nums dark:bg-white/10">
                 {m.scoreA !== null ? `${m.scoreA} – ${m.scoreB}` : m.winner ? (m.winner === 'a' ? '✓ –' : '– ✓') : 'N/C'}
               </span>
               <span className={`min-w-0 flex-1 truncate text-left text-sm ${m.winner === 'b' ? 'font-black' : 'text-slate-500 dark:text-slate-400'}`}>{join(m.b.map((id) => nameOf(s, id)))}</span>

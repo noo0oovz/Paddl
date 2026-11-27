@@ -76,7 +76,7 @@ export default function DataSheet({ onClose }: { onClose: () => void }) {
                 <li>👥 {picked.backup.roster.length} saved players</li>
               </ul>
               {picked.warnings.length > 0 && (
-                <div className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                <div className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-medium text-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                   <div className="font-bold">Some items could not be read and will be left out:</div>
                   <ul className="mt-1 list-disc pl-4">{picked.warnings.slice(0, 4).map((w) => <li key={w}>{w}</li>)}</ul>
                   {picked.warnings.length > 4 && <div className="mt-1">…and {picked.warnings.length - 4} more.</div>}

@@ -29,7 +29,7 @@
   --color-green-200: #d2ff7d;
   --color-green-300: #c3ff55;
   --color-green-400: #b6ff3b;
-  --color-green-500: #a2f01c;
+  --color-green-500: #b6ff3b; /* the brand lime is 400-600 on purpose (500 used to be a darker shade, so the scale went light, dark, light) */
   --color-green-600: #b6ff3b;
   --color-green-700: #3f6b00;
   --color-green-800: #345700;
@@ -171,6 +171,18 @@ body::before {
 }
 @utility input {
   @apply min-h-11 w-full rounded-xl border border-slate-300 bg-white/80 px-3 text-base outline-none focus:border-green-700 focus:ring-2 focus:ring-accent/40 dark:border-white/15 dark:bg-white/5 dark:focus:border-accent;
+}
+/* Radius scale: cards rounded-2xl, controls rounded-xl, pills rounded-full, the Board's big cards rounded-3xl. */
+/* A pill button (a name in the waiting line, a regular in Setup). hit keeps a 44px touch area; chip-accent is the highlighted one. */
+@utility chip {
+  @apply hit inline-flex items-center rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium transition hover:bg-slate-200 active:scale-[0.97] dark:bg-slate-800 dark:hover:bg-slate-700;
+}
+@utility chip-accent {
+  @apply hit inline-flex items-center rounded-full bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-800 transition hover:brightness-95 active:scale-[0.97] dark:bg-green-950 dark:text-green-300;
+}
+/* A dropdown that matches .input (height, radius, colours in both themes). */
+@utility select {
+  @apply min-h-11 rounded-xl border border-slate-300 bg-white/80 px-2 text-sm outline-none focus:border-green-700 focus:ring-2 focus:ring-accent/40 dark:border-white/15 dark:bg-slate-900 dark:focus:border-accent;
 }
 @utility label {
   @apply mb-1.5 block text-xs font-bold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400;
