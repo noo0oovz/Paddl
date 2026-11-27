@@ -1,5 +1,6 @@
 import { Undo2 } from 'lucide-react'
 import { undo, useData } from '../store'
+import { buzz } from '../lib/haptics'
 
 /** Always-visible Undo. Shows how many steps can be undone. */
 export default function UndoButton({ full = false }: { full?: boolean }) {
@@ -7,7 +8,7 @@ export default function UndoButton({ full = false }: { full?: boolean }) {
   return (
     <button
       className={`btn-soft !min-h-9 ${full ? '!px-3 w-full justify-start' : '!px-2.5 min-[420px]:!px-3'}`}
-      onClick={undo}
+      onClick={() => { if (undo()) buzz('undo') }}
       disabled={!depth}
       aria-label={`Undo last action${depth ? ` (${depth} available)` : ''}`}
       title={depth ? `Undo (${depth} step${depth === 1 ? '' : 's'} available)` : 'Nothing to undo'}

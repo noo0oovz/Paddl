@@ -7,6 +7,7 @@ import { finishMatch } from '../engine/session'
 import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
+import { buzz } from '../lib/haptics'
 import { elapsed, gameIsArmed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall, Vs } from './art'
@@ -120,6 +121,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     const ids = side === 'a' ? c.match.a : c.match.b
     const gid = c.match.gid
     if (!updateActive((x) => finishMatch(x, courtId, { winner: side, scoreA: null, scoreB: null, expect: gid }))) return // an ignored stale tap
+    buzz('win')
     show(`${join(ids.map((id) => nameOf(s, id)))} won on ${c.name}`)
   }
 
@@ -142,7 +144,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   useEffect(() => () => { if (holdRaf.current) cancelAnimationFrame(holdRaf.current); if (nudgeTimer.current) clearTimeout(nudgeTimer.current) }, [])
 
   function doUndo() {
-    undo()
+    if (undo()) buzz('undo')
     setToast(null)
   }
 

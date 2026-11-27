@@ -196,12 +196,14 @@ export function updateActive(fn: (s: Session) => Session): boolean {
   return true
 }
 
-export function undo() {
+/** Step back one change. Returns whether anything was undone (false when there was nothing to undo). */
+export function undo(): boolean {
   const prev = undoStore.stack.pop()
-  if (!prev) return
+  if (!prev) return false
   const restored = JSON.parse(prev) as Session
   changes++
   commit({ sessions: data.sessions.map((s) => (s.id === restored.id ? restored : s)) })
+  return true
 }
 
 /** Undo only if nothing at all has changed since `count` was read from changeCount(). Returns whether it undid. */

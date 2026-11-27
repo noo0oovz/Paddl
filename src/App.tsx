@@ -11,6 +11,7 @@ import Standings from './components/Standings'
 import History from './components/History'
 import Summary from './components/Summary'
 import ThemeSwitch from './components/ThemeSwitch'
+import HapticsToggle from './components/HapticsToggle'
 import Help from './components/Help'
 import DataSheet from './components/DataSheet'
 import InstallGuide from './components/InstallGuide'
@@ -97,6 +98,7 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
           <UndoButton full />
           <SaveStatus className="block px-1 pb-1" />
           <div className="pb-1"><ThemeSwitch fill /></div>
+          <HapticsToggle />
           <button className="btn-ghost w-full justify-start" onClick={() => openSession(null)}><HomeIcon size={18} /> All sessions</button>
           <button className="btn-danger w-full" onClick={finish}><Flag size={18} /> End session</button>
         </div>

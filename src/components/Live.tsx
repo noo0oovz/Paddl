@@ -14,6 +14,7 @@ import {
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
 import { changeCount, undoIfUnchanged, updateActive } from '../store'
+import { buzz } from '../lib/haptics'
 import { elapsed, gameIsArmed, isEnter, join, plural, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
@@ -151,7 +152,7 @@ export default function Live({ s }: { s: Session }) {
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
-              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side, gid) => { if (!c.match || !gameIsArmed(c.match.startedAt)) return; const ids = side === 'a' ? c.match?.a : c.match?.b; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) { refocusCourt = c.id; showWon(`${join((ids ?? []).map((id) => nameOf(s, id)))} won on ${c.name}`) } }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side, gid) => { if (!c.match || !gameIsArmed(c.match.startedAt)) return; const ids = side === 'a' ? c.match?.a : c.match?.b; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) { buzz('win'); refocusCourt = c.id; showWon(`${join((ids ?? []).map((id) => nameOf(s, id)))} won on ${c.name}`) } }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
@@ -213,7 +214,7 @@ export default function Live({ s }: { s: Session }) {
         <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 top-[3.75rem] z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:top-auto md:bottom-4">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Trophy size={15} /></span>
           <span className="min-w-0 flex-1 text-sm leading-snug font-bold [overflow-wrap:anywhere]">{won.text}</span>
-          <button className="btn-toast !min-h-9 shrink-0 !px-3" onClick={() => { undoIfUnchanged(won.at); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
+          <button className="btn-toast !min-h-9 shrink-0 !px-3" onClick={() => { if (undoIfUnchanged(won.at)) buzz('undo'); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
         </div>
       )}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
@@ -358,7 +359,7 @@ function ScoreSheet({ s, court, onClose }: { s: Session; court: Court; onClose: 
   const error = haveScores ? validateScore(Number(a), Number(b), s.config) : null
 
   function done(r: Result) {
-    updateActive((x) => finishMatch(x, court.id, r))
+    if (updateActive((x) => finishMatch(x, court.id, r))) buzz('win')
     onClose()
   }
   const submitScore = () => {
