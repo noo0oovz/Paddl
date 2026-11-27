@@ -118,9 +118,12 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
         </header>
 
         <main className="flex-1 pb-20 md:pb-0">
-          {tab === 'live' && <Live s={s} />}
-          {tab === 'standings' && <Standings s={s} />}
-          {tab === 'history' && <History s={s} />}
+          {/* keyed by tab so each one fades in when chosen (tab-in is switched off for people who prefer reduced motion) */}
+          <div key={tab} className="tab-in">
+            {tab === 'live' && <Live s={s} />}
+            {tab === 'standings' && <Standings s={s} />}
+            {tab === 'history' && <History s={s} />}
+          </div>
         </main>
 
         <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-3 border-t border-slate-200 bg-white/80 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden dark:border-white/10 dark:bg-slate-950/75">

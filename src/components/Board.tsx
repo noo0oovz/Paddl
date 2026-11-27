@@ -23,7 +23,7 @@ import { TIME_MARK_MIN } from '../lib/cues'
  * to a TV. Tap the winning team on a court to record the result and bring on the next match without leaving.
  */
 export default function Board({ s, onClose }: { s: Session; onClose: () => void }) {
-  const now = useNow(15000)
+  const now = useNow(5000)
   const { undo: undoDepth } = useData()
   const sound = useSound()
   const [full, setFull] = useState(false)

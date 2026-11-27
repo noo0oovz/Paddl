@@ -27,8 +27,12 @@ export function elapsed(since: number, now: number): string {
 
 export const join = (names: string[]) => names.join(' & ')
 
-/** Re-render on an interval (used for live elapsed timers). */
-export function useNow(ms = 30000): number {
+/**
+ * Re-render on an interval (used for live elapsed timers). Every 10 s by default: a refresh of the Courts screen costs about
+ * 2 ms even with 80 players, 12 courts and 600 games, so this is cheap, and a minute counter is never more than 10 s late
+ * (it used to be up to 30 s).
+ */
+export function useNow(ms = 10000): number {
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), ms)

@@ -20,6 +20,7 @@ import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
 import { courtCall, upNextCall } from '../lib/announce'
 import { useAnnouncer } from '../lib/useAnnouncer'
+import { useNewlyOnDeck } from '../lib/useNewlyOnDeck'
 import { hintsSeen, markHintsSeen } from '../lib/hints'
 
 export default function Live({ s }: { s: Session }) {
@@ -104,6 +105,7 @@ export default function Live({ s }: { s: Session }) {
   const waiting = waitingUnits(s)
   const waitingPlayers = waiting.reduce((n, u) => n + u.ids.length, 0)
   const longest = longestWait(s, waiting.map((u) => u.ids), now)
+  const onDeckNow = useNewlyOnDeck(nextUp ? [...nextUp.a, ...(nextUp.b ?? [])] : [])
   const need = unitsNeeded(s.config.format)
   const upcoming = previewQueue(s, 4)
   const eta = queueEta(s, now)
@@ -193,7 +195,7 @@ export default function Live({ s }: { s: Session }) {
                 <div className="mb-1.5 text-xs font-semibold text-slate-500">Games played · how long waited · when up (tap a name to move)</div>
                 <div className="flex flex-wrap gap-x-1.5 gap-y-3">
                   {waiting.map((u, i) => (
-                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className={`chip ${longest?.index === i ? 'ring-2 ring-accent/70' : ''}`} title={longest?.index === i ? 'Has waited the longest' : undefined}>
+                    <button key={u.key} onClick={() => setWaitFor(u.ids[0])} className={`chip ${longest?.index === i ? 'ring-2 ring-accent/70' : ''} ${u.ids.some((id) => onDeckNow.has(id)) ? 'chip-called' : ''}`} title={longest?.index === i ? 'Has waited the longest' : undefined}>
                       {u.pri < 0 && <span title="Playing next">⏭ </span>}
                       {u.pri > 0 && <span title="Sent to back">⏬ </span>}
                       {u.ids.map((id) => nameOf(s, id)).join(' & ')} <span className="text-slate-400">· {s.players.filter((p) => u.ids.includes(p.id)).reduce((n, p) => Math.max(n, playedOf(p, counts)), 0)}</span>
