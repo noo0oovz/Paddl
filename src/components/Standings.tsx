@@ -1,5 +1,6 @@
 import { awardsByName } from '../engine/insights'
 import { standings } from '../engine/stats'
+import type { PlayerStat } from '../engine/stats'
 import type { Session } from '../engine/types'
 import { Empty } from './ui'
 
@@ -7,8 +8,23 @@ export function medal(i: number): string {
   return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : String(i + 1)
 }
 
+/**
+ * What to show in the place column for each row. Players level on wins, losses and points difference share a place (they were
+ * only ordered by name before), and a medal goes only to someone who has actually won a game: with no wins there is no podium.
+ */
+export function placeLabels(rows: PlayerStat[]): string[] {
+  let place = 0
+  return rows.map((r, i) => {
+    const prev = rows[i - 1]
+    if (!prev || prev.wins !== r.wins || prev.losses !== r.losses || prev.diff !== r.diff) place = i + 1
+    if (r.wins + r.losses === 0) return '–'
+    return r.wins > 0 && place <= 3 ? medal(place - 1) : String(place)
+  })
+}
+
 export default function Standings({ s }: { s: Session }) {
   const rows = standings(s)
+  const places = placeLabels(rows)
   const scored = rows.some((r) => r.pf + r.pa > 0)
   const badges = awardsByName(s)
   if (!s.players.length) return <Empty scene="players" title="No players yet" hint="Open Courts, then Players, to add some." />
@@ -33,7 +49,7 @@ export default function Standings({ s }: { s: Session }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                <td className="px-2 sm:px-3 py-2.5 font-bold">{played ? medal(i) : '–'}</td>
+                <td className="px-2 sm:px-3 py-2.5 font-bold">{played ? places[i] : '–'}</td>
                 <td className="max-w-[6rem] sm:max-w-[9rem] truncate px-1.5 sm:px-2 py-2.5 font-semibold">
                   {r.name}
                   {r.status !== 'active' && <span className="ml-1 text-xs font-normal text-slate-400">({r.status === 'resting' ? 'break' : 'left'})</span>}

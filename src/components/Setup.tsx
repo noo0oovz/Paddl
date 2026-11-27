@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG, FORMAT_INFO, MODE_INFO, type Config, type Format, type 
 import { addSession, useData } from '../store'
 import { Segmented, Stepper, Toggle } from './ui'
 import ThemeSwitch from './ThemeSwitch'
+import { isEnter } from '../lib/util'
 
 const LEVELS = [2.5, 3, 3.5, 4, 4.5, 5]
 
@@ -25,25 +26,51 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
 
   const isTeams = cfg.format === 'teams'
   const taken = useMemo(() => new Set([...players.map((p) => p.name), ...pairs.flat().map((p) => p.name)].map((n) => n.toLowerCase())), [players, pairs])
-  const problem = sessionReady(cfg, players.length, pairs.length)
+  const MAX_PLAYERS = 80
+  const [note, setNote] = useState<string | null>(null)
   const skill = cfg.mode === 'skill'
 
-  function addNames(text: string) {
+  /** The people a block of typed or pasted text would add (new names only, within the cap). */
+  function freshFrom(text: string, already: NewPlayer[] = players): NewPlayer[] {
     const fresh: NewPlayer[] = []
-    const seen = new Set(taken)
-    for (const n of parseNames(text)) {
-      if (seen.has(n.toLowerCase())) continue
+    const seen = new Set([...taken, ...already.map((p) => p.name.toLowerCase())])
+    for (const raw of parseNames(text)) {
+      const n = raw.slice(0, 30).trim() // cut BEFORE the duplicate check, so two long names that share their first 30 letters are one name
+      if (!n || seen.has(n.toLowerCase())) continue
       seen.add(n.toLowerCase())
       const known = roster.find((r) => r.name.toLowerCase() === n.toLowerCase())
       fresh.push({ name: n, level: known?.level ?? 3.5 })
     }
-    if (fresh.length) setPlayers((p) => [...p, ...fresh])
+    return fresh
+  }
+
+  function addNames(text: string) {
+    const fresh = freshFrom(text, [])
+    const room = Math.max(0, MAX_PLAYERS - players.length)
+    if (fresh.length > room) setNote(`Up to ${MAX_PLAYERS} players per session. ${fresh.length - room} not added.`)
+    else setNote(null)
+    if (fresh.length) setPlayers((p) => [...p, ...fresh.slice(0, room)])
     setDraft('')
   }
 
+  // A name typed but not yet confirmed with Enter still counts: tapping Start must not silently drop it.
+  const pendingPlayers = isTeams ? [] : freshFrom(draft, []).slice(0, Math.max(0, MAX_PLAYERS - players.length))
+  const pendingPair = (() => {
+    const [x, y] = pairDraft.map((n) => n.trim().replace(/\s+/g, ' ').slice(0, 30).trim())
+    if (!isTeams || !x || !y || x.toLowerCase() === y.toLowerCase() || taken.has(x.toLowerCase()) || taken.has(y.toLowerCase())) return null
+    return [x, y] as const
+  })()
+  const allPlayers = [...players, ...pendingPlayers]
+  const allPairs = pendingPair ? [...pairs, [{ name: pendingPair[0], level: roster.find((r) => r.name.toLowerCase() === pendingPair[0].toLowerCase())?.level ?? 3.5 }, { name: pendingPair[1], level: roster.find((r) => r.name.toLowerCase() === pendingPair[1].toLowerCase())?.level ?? 3.5 }] as [NewPlayer, NewPlayer]] : pairs
+  const problem = sessionReady(cfg, allPlayers.length, allPairs.length)
+
   function addPair() {
-    const [x, y] = pairDraft.map((n) => n.trim().replace(/\s+/g, ' '))
-    if (!x || !y || x.toLowerCase() === y.toLowerCase() || taken.has(x.toLowerCase()) || taken.has(y.toLowerCase())) return
+    const [x, y] = pairDraft.map((n) => n.trim().replace(/\s+/g, ' ').slice(0, 30))
+    if (!x || !y) return
+    if (x.toLowerCase() === y.toLowerCase()) { setNote('A team needs two different people.'); return }
+    const twice = [x, y].find((n) => taken.has(n.toLowerCase()))
+    if (twice) { setNote(`${twice} is already on a team.`); return }
+    setNote(null)
     const lv = (n: string) => roster.find((r) => r.name.toLowerCase() === n.toLowerCase())?.level ?? 3.5
     setPairs((p) => [...p, [{ name: x, level: lv(x) }, { name: y, level: lv(y) }]])
     setPairDraft(['', ''])
@@ -51,7 +78,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
 
   function start() {
     if (problem) return
-    addSession(createSession(name, cfg, players, pairs))
+    addSession(createSession(name.trim().slice(0, 60), { ...cfg, challengerCourt: cfg.courts >= 2 ? cfg.challengerCourt : false }, allPlayers, allPairs))
     onCancel() // leave the setup screen; the new session is now the active one
   }
 
@@ -69,7 +96,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
       <div className="mt-5 space-y-5">
         <section className="card p-4">
           <label className="label" htmlFor="sname">Session name</label>
-          <input id="sname" className="input" placeholder="Saturday open play" value={name} onChange={(e) => setName(e.target.value)} />
+          <input id="sname" className="input" placeholder="Saturday open play" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
         </section>
 
         <section className="card space-y-4 p-4">
@@ -89,6 +116,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                   key={m}
                   type="button"
                   onClick={() => set({ mode: m })}
+                  aria-pressed={cfg.mode === m}
                   className={`rounded-xl border p-3 text-left transition ${
                     cfg.mode === m ? 'border-green-600 bg-green-50 ring-2 ring-green-600/30 dark:bg-green-950/40' : 'border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
                   }`}
@@ -101,7 +129,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div className="label !mb-0">Courts</div>
-            <Stepper label="courts" value={cfg.courts} min={1} max={12} onChange={(n) => set({ courts: n })} />
+            <Stepper label="courts" value={cfg.courts} min={1} max={12} onChange={(n) => set(n < 2 ? { courts: n, challengerCourt: false } : { courts: n })} />
           </div>
           <div>
             <div className="label">Play to</div>
@@ -140,19 +168,20 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
             <div className="label !mb-0">{isTeams ? `Teams (${pairs.length})` : `Players (${players.length})`}</div>
             {problem && <div className="text-xs font-semibold text-amber-800 dark:text-amber-400">{problem}</div>}
           </div>
+          {note && <div role="status" className="mb-2 rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 dark:bg-amber-950 dark:text-amber-200">{note}</div>}
 
           {isTeams ? (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2">
-                <input className="input" placeholder="Player 1" value={pairDraft[0]} onChange={(e) => setPairDraft([e.target.value, pairDraft[1]])} />
-                <input className="input" placeholder="Player 2" value={pairDraft[1]} onChange={(e) => setPairDraft([pairDraft[0], e.target.value])} onKeyDown={(e) => e.key === 'Enter' && addPair()} />
+                <input className="input" placeholder="Player 1" aria-label="Player 1 name" maxLength={30} value={pairDraft[0]} onChange={(e) => setPairDraft([e.target.value, pairDraft[1]])} />
+                <input className="input" placeholder="Player 2" aria-label="Player 2 name" maxLength={30} value={pairDraft[1]} onChange={(e) => setPairDraft([pairDraft[0], e.target.value])} onKeyDown={(e) => isEnter(e) && addPair()} />
               </div>
               <button className="btn-soft w-full" onClick={addPair} disabled={!pairDraft[0].trim() || !pairDraft[1].trim()}><Plus size={18} /> Add team</button>
               <ul className="space-y-1.5 pt-1">
                 {pairs.map(([x, y], i) => (
                   <li key={i} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium dark:bg-slate-800">
                     <span>{x.name} &amp; {y.name}</span>
-                    <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => setPairs((p) => p.filter((_, j) => j !== i))} aria-label="Remove team"><X size={18} /></button>
+                    <button className="-my-1 -mr-2 grid h-11 w-11 place-items-center text-slate-500 hover:text-red-600" onClick={() => setPairs((p) => p.filter((_, j) => j !== i))} aria-label={`Remove team ${x.name} and ${y.name}`}><X size={18} /></button>
                   </li>
                 ))}
               </ul>
@@ -163,10 +192,12 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                 <input
                   className="input"
                   placeholder="Type a name, then Enter"
+                  aria-label="Player name"
+                  maxLength={400}
                   value={draft}
                   autoCapitalize="words"
                   onChange={(e) => setDraft(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addNames(draft)}
+                  onKeyDown={(e) => isEnter(e) && addNames(draft)}
                   onPaste={(e) => {
                     const t = e.clipboardData.getData('text')
                     if (/[\n,;]/.test(t)) { e.preventDefault(); addNames(t) }
@@ -206,7 +237,7 @@ export default function Setup({ onCancel }: { onCancel: () => void }) {
                         {LEVELS.map((l) => <option key={l} value={l}>{l.toFixed(1)}</option>)}
                       </select>
                     )}
-                    <button className="p-1 text-slate-400 hover:text-red-600" onClick={() => setPlayers((arr) => arr.filter((_, j) => j !== i))} aria-label={`Remove ${p.name}`}><X size={18} /></button>
+                    <button className="-my-1 -mr-2 grid h-11 w-11 shrink-0 place-items-center text-slate-500 hover:text-red-600" onClick={() => setPlayers((arr) => arr.filter((_, j) => j !== i))} aria-label={`Remove ${p.name}`}><X size={18} /></button>
                   </li>
                 ))}
               </ul>

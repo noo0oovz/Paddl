@@ -7,13 +7,14 @@ import { finishMatch } from '../engine/session'
 import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { nameOf } from '../engine/stats'
 import { setSound, useSound } from '../lib/cues'
-import { elapsed, join, useNow } from '../lib/util'
+import { elapsed, gameIsArmed, join, useNow } from '../lib/util'
 import { undo, updateActive, useData } from '../store'
 import { CourtLines, PaddleBall, Vs } from './art'
 import VoiceSheet from './VoiceSheet'
 import BoardCourt from './BoardCourt'
 import { courtCall, upNextCall } from '../lib/announce'
 import { useAnnouncer } from '../lib/useAnnouncer'
+import { useDialog } from '../lib/dialogStack'
 import { TIME_MARK_MIN } from '../lib/cues'
 
 /**
@@ -79,18 +80,20 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     }
   }, [])
 
+  // Escape, focus-in, Tab trapping and focus-back are shared with the sheets (useDialog keeps the latest onClose in a ref).
+  useDialog(boardRef, onClose)
+  // This effect must run ONCE for as long as the Board is open. The parent hands in a new onClose on every render (every
+  // game, every clock tick), so if this depended on it, its cleanup would run each time: it would leave full screen and
+  // cancel the result toast's timer, so the Board dropped out of full screen after every win and the toast never went away.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     const onFs = () => setFull(!!document.fullscreenElement)
-    window.addEventListener('keydown', onKey)
     document.addEventListener('fullscreenchange', onFs)
     return () => {
-      window.removeEventListener('keydown', onKey)
       document.removeEventListener('fullscreenchange', onFs)
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
       if (timer.current) clearTimeout(timer.current)
     }
-  }, [onClose])
+  }, [])
 
   function toggleFull() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {})
@@ -113,6 +116,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
     }
     const c = s.courts.find((x) => x.id === courtId)
     if (!c?.match) return
+    if (!gameIsArmed(c.match.startedAt)) return // a double tap landing on the game that has just started
     const ids = side === 'a' ? c.match.a : c.match.b
     const gid = c.match.gid
     if (!updateActive((x) => finishMatch(x, courtId, { winner: side, scoreA: null, scoreB: null, expect: gid }))) return // an ignored stale tap
@@ -145,7 +149,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
   const iconBtn = 'btn border border-white/10 bg-white/5 text-white hover:bg-white/10'
 
   return (
-    <div ref={boardRef} className="board-scroll fixed inset-x-0 top-0 z-[60] overflow-y-auto overscroll-contain bg-slate-950 p-4 text-white sm:p-6" style={{ height: '100dvh', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }} role="dialog" aria-label="Court board">
+    <div ref={boardRef} className="board-scroll fixed inset-x-0 top-0 z-[60] overflow-y-auto overscroll-contain bg-slate-950 p-4 text-white sm:p-6" style={{ height: '100dvh', touchAction: 'pan-y', WebkitOverflowScrolling: 'touch' }} role="dialog" aria-modal="true" aria-label="Court board">
       <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(50rem_30rem_at_10%_-10%,rgba(182,255,59,0.12),transparent_60%),radial-gradient(50rem_30rem_at_100%_0%,rgba(34,211,238,0.12),transparent_60%)]" />
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -160,7 +164,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
             </button>
             {locked ? (
               <button
-                onPointerDown={startHold} onPointerUp={cancelHold} onPointerLeave={cancelHold} onPointerCancel={cancelHold}
+                onPointerDown={startHold} onPointerUp={cancelHold} onPointerLeave={cancelHold} onPointerCancel={cancelHold} onBlur={cancelHold}
                 onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); startHold() } }} onKeyUp={cancelHold}
                 className="btn relative overflow-hidden border border-amber-400/60 bg-amber-400/15 text-amber-200 select-none" style={{ touchAction: 'none' }}
                 aria-label="Locked. Press and hold to unlock" aria-pressed title="Locked: taps on winners are ignored. Press and hold to unlock."
@@ -186,7 +190,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         )}
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <div className={`grid gap-4 ${s.courts.length > 1 ? 'md:grid-cols-2' : ''}`}>
+          <div className={`grid grid-cols-[minmax(0,1fr)] gap-4 ${s.courts.length > 1 ? 'md:grid-cols-[repeat(2,minmax(0,1fr))]' : ''}`}>
             {s.courts.map((c) => {
               const m = c.match
               const call = streakCall(s, c.id)
@@ -312,7 +316,7 @@ export default function Board({ s, onClose }: { s: Session; onClose: () => void 
         <div key={toast.id} role="status" className="paddl-in fixed inset-x-4 bottom-4 z-[70] mx-auto flex max-w-xl items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-4 py-3 shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Check size={18} /></span>
           <span className="min-w-0 flex-1 truncate text-base font-bold">🏆 {toast.text}</span>
-          <button onClick={doUndo} className="btn-soft !min-h-10 shrink-0 !px-4 !text-white"><Undo2 size={16} /> Undo</button>
+          <button onClick={doUndo} className="btn-toast !min-h-10 shrink-0 !px-4"><Undo2 size={16} /> Undo</button>
         </div>
       )}
     </div>

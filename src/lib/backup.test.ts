@@ -202,3 +202,42 @@ describe('sessions saved by older versions of the app still load', () => {
     expect(sessionProblem(raw)).not.toBeNull()
   })
 })
+
+describe('damaged courts and players are refused instead of crashing the app', () => {
+  const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x))
+  const bad = (edit: (s: any) => void) => { const s = clone(busy()) as any; edit(s); return sessionProblem(s) }
+
+  it('a court hold that is not a hold', () => {
+    expect(bad((s) => { s.courts[0].hold = 'x' })).toMatch(/hold/)
+    expect(bad((s) => { s.courts[0].hold = { streak: 1 } })).toMatch(/hold/)
+    expect(bad((s) => { s.courts[0].hold = { ids: 'zz', streak: 1 } })).toMatch(/hold/)
+    expect(bad((s) => { s.courts[0].hold = { ids: ['nobody'], streak: 1 } })).toMatch(/hold/)
+    expect(bad((s) => { s.courts[0].hold = { ids: [], streak: 'a' } })).toMatch(/hold/)
+  })
+  it('court badges that are not a list of known badges', () => {
+    expect(bad((s) => { s.courts[0].tags = 'fast' })).toMatch(/badges/)
+    expect(bad((s) => { s.courts[0].tags = ['zzz'] })).toMatch(/badges/)
+    expect(bad((s) => { s.courts[0].tags = [1] })).toMatch(/badges/)
+    expect(bad((s) => { s.courts[0].tags = ['__proto__'] })).toMatch(/badges/)
+  })
+  it('player time ranges that are not [from, to]', () => {
+    expect(bad((s) => { s.players[0].intervals = [[0], null] })).toMatch(/time range/)
+    expect(bad((s) => { s.players[0].intervals = [null] })).toMatch(/time range/)
+    expect(bad((s) => { s.players[0].intervals = [['a', 1]] })).toMatch(/time range/)
+    expect(bad((s) => { s.players[0].intervals = [[1, 2, 3]] })).toMatch(/time range/)
+  })
+  it('and a good session, including old saves with no hold or no badges, still loads', () => {
+    expect(bad(() => {})).toBeNull()
+    expect(bad((s) => { for (const c of s.courts) { delete c.hold; delete c.tags } })).toBeNull() // saved by an older version
+    expect(bad((s) => { s.courts[0].hold = null; s.courts[0].tags = [] })).toBeNull()
+    expect(bad((s) => { s.players[0].intervals = [[0, null], [3, 7]] })).toBeNull()
+  })
+  it('real sessions in every mode and format validate, so nothing legitimate is quarantined', () => {
+    for (const cfg of [{}, { mode: 'winners' as const }, { mode: 'skill' as const }, { mode: 'robin' as const }, { mode: 'mystery' as const }, { format: 'singles' as const }, { challengerCourt: true, courts: 3 }, { mode: 'winners' as const, winnersSplit: true }]) {
+      let s = busy(cfg)
+      for (let i = 0; i < 12; i++) { const live = s.courts.filter((c) => c.match); if (!live.length) break; s = finishMatch(s, live[i % live.length].id, { winner: i % 2 ? 'a' : 'b', scoreA: null, scoreB: null }) }
+      s = toggleCourtTag(s, s.courts[0].id, 'challenger')
+      expect(sessionProblem(JSON.parse(JSON.stringify(s))), JSON.stringify(cfg)).toBeNull()
+    }
+  })
+})

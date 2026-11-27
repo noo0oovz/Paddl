@@ -97,6 +97,8 @@ export interface Session {
   nextId: number
   remix?: number // shuffle seed, bumped each time the host remixes
   fresh?: boolean // a remix is pending: the next match drawn uses extra randomness and a wider pool
+  /** The match the host chose with "Redraw next". The next draw uses exactly this while all of its players are still free, so what was shown is what starts. */
+  pinned?: { a: string[]; b: string[]; line: string } | null
 }
 
 export const DEFAULT_CONFIG: Config = {

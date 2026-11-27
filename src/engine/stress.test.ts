@@ -179,13 +179,18 @@ describe('stress: random hosts doing random (and abusive) things', () => {
   })
 
   it('fairness holds under chaos: nobody who stays all night is left far behind', () => {
-    for (let seed = 1; seed <= 25; seed++) {
+    for (let seed = 1; seed <= 120; seed++) {
       const r = rng(seed * 31)
       let s = S.createSession('fair', { courts: 2 }, NAMES.slice(0, 12).map((name) => ({ name })))
+      // Courts end in the order they started, with the next one finishing first about a quarter of the time. (Ending a
+      // RANDOM court every time lets one court play fifty games while the other stays on the same four players, and those
+      // four then look "behind" for a reason that is the simulation, not the queue.)
+      const order = s.courts.map((x) => x.id)
       for (let i = 0; i < 80; i++) {
-        const liveCourts = s.courts.filter((x) => x.match)
+        const liveCourts = order.map((id) => s.courts.find((x) => x.id === id)!).filter((x) => x?.match)
         if (!liveCourts.length) break
-        const c = liveCourts[Math.floor(r() * liveCourts.length)]
+        const c = liveCourts.length > 1 && r() < 0.25 ? liveCourts[1] : liveCourts[0]
+        order.splice(order.indexOf(c.id), 1); order.push(c.id)
         s = S.finishMatch(s, c.id, { winner: r() < 0.5 ? 'a' : 'b', scoreA: null, scoreB: null })
         if (r() < 0.15) s = S.remixNext(s)
         if (r() < 0.1) s = S.sendBack(s, s.players[Math.floor(r() * s.players.length)].id)

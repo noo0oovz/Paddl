@@ -3,7 +3,7 @@ import { CircleDot, Flag, HardDriveDownload, HelpCircle, Smartphone, History as 
 import { endSession } from './engine/session'
 import { MODE_INFO, type Session } from './engine/types'
 import { damagedAtStartup, openSession, updateActive, useData } from './store'
-import { fmtDate } from './lib/util'
+import { fmtDate, plural } from './lib/util'
 import { useWakeLock } from './lib/util'
 import Setup from './components/Setup'
 import Live from './components/Live'
@@ -64,9 +64,13 @@ function Shell({ s, tab, setTab, onHelp, onData, onInstall }: { s: Session; tab:
   const { ask, dialog } = useConfirm()
   function finish() {
     const n = s.matches.length
+    // Games still being played when the night ends are NOT counted: ending clears every court. Say so, so the last results
+    // are recorded first (or the host knows to expect them missing) instead of finding out from the results screen.
+    const live = s.courts.filter((c) => c.match).length
+    const liveNote = live > 0 ? ` ${live} ${live === 1 ? 'game is' : 'games are'} still being played on court and will not be counted. Tap Cancel and record ${live === 1 ? 'its result' : 'their results'} first if you want ${live === 1 ? 'it' : 'them'} in the standings.` : ''
     ask({
       title: 'End this session?',
-      body: n === 0 ? 'No games have been recorded yet.' : `You will see the final results, standings and pictures to share. ${n} ${n === 1 ? 'game is' : 'games are'} saved, and you can reopen the session if you end it by mistake.`,
+      body: (n === 0 ? 'No games have been recorded yet.' : `You will see the final results, standings and pictures to share. ${n} ${n === 1 ? 'game is' : 'games are'} saved, and you can reopen the session if you end it by mistake.`) + liveNote,
       confirmLabel: 'End session',
       danger: true,
       onConfirm: () => updateActive((x) => endSession(x)),
@@ -158,7 +162,7 @@ function Home({ onNew, onHelp, onData, onInstall }: { onNew: () => void; onHelp:
           <button className="flex w-full items-center gap-3 text-left" onClick={() => openSession(resume.id)}>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-lg font-black">{resume.name}</span>
-              <span className="block text-sm text-slate-500 dark:text-slate-400">{resume.players.length} players · {resume.matches.length} {resume.matches.length === 1 ? 'game' : 'games'} played · {MODE_INFO[resume.config.mode].label}</span>
+              <span className="block text-sm text-slate-500 dark:text-slate-400">{plural(resume.players.length, 'player')} · {plural(resume.matches.length, 'game')} played · {MODE_INFO[resume.config.mode].label}</span>
             </span>
             <span className="btn-primary !min-h-12 shrink-0 px-5">Resume</span>
           </button>
@@ -223,7 +227,7 @@ function Row({ s, live }: { s: Session; live?: boolean }) {
     <button className="card flex w-full items-center gap-3 p-4 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => openSession(s.id)}>
       <div className="min-w-0 flex-1">
         <div className="truncate font-bold">{s.name}</div>
-        <div className="text-xs text-slate-500">{fmtDate(s.createdAt)} · {s.players.length} players · {s.matches.length} games · {MODE_INFO[s.config.mode].label}</div>
+        <div className="text-xs text-slate-500">{fmtDate(s.createdAt)} · {plural(s.players.length, 'player')} · {plural(s.matches.length, 'game')} · {MODE_INFO[s.config.mode].label}</div>
       </div>
       <span className={`rounded-full px-3 py-1 text-xs font-bold ${live ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800'}`}>{live ? 'Resume' : 'Results'}</span>
     </button>

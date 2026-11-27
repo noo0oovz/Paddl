@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import { Illustration, Logo, PaddleBall } from './art'
+import { useDialog } from '../lib/dialogStack'
 
 const KEY = 'paddl:tour'
 
@@ -39,8 +40,11 @@ export default function Tour({ onDone }: { onDone: () => void }) {
     onDone()
   }
 
+  const box = useRef<HTMLDivElement>(null)
+  useDialog(box, finish)
+
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-md sm:items-center" role="dialog" aria-label="Welcome tour">
+    <div ref={box} aria-modal="true" className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/80 p-4 backdrop-blur-md sm:items-center" role="dialog" aria-label="Welcome tour">
       <div className="sheet-in card w-full max-w-md p-6 text-center">
         <div className="mx-auto mb-2 flex h-28 items-center justify-center text-slate-500 dark:text-slate-300">
           {step.scene === 'logo' ? <Logo size={96} /> : <Illustration scene={step.scene} />}

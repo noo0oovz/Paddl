@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronDown, Crown, Flame, Timer, Trophy } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { PaddleBall } from './art'
+import { placeLabels } from './Standings'
 import { nameOf, playerStandings, standings, summarize, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
 import { awardsByName } from '../engine/insights'
@@ -24,6 +25,8 @@ const medal = (i: number) => MEDAL[i] ?? String(i + 1)
 export function Podium({ rows }: { rows: PlayerStat[] }) {
   const top = rows.slice(0, 3).filter((r) => r.wins > 0)
   if (!top.length) return null
+  // Level players share a place, the same as in the standings tables (rank by record, not by position in the sorted list).
+  const rank = top.map((r, k) => { let j = k; while (j > 0 && top[j - 1].wins === r.wins && top[j - 1].losses === r.losses && top[j - 1].diff === r.diff) j--; return j })
   // Visual order: 2nd, 1st, 3rd.
   const order = [top[1], top[0], top[2]]
   const place = [1, 0, 2]
@@ -34,7 +37,7 @@ export function Podium({ rows }: { rows: PlayerStat[] }) {
             <div className="relative grid grid-cols-3 items-end gap-2 border-b-2 border-accent/60 shadow-[0_8px_24px_-12px_rgba(182,255,59,0.7)]">
         {order.map((p, col) => {
           if (!p) return <div key={col} />
-          const i = place[col]
+          const i = rank[place[col]] // 0 = first place, tied players share it
           const first = i === 0
           return (
             <div key={p.id} className="flex flex-col items-center">
@@ -102,6 +105,7 @@ function Section({ emoji, title, hint, children, defaultOpen = true }: { emoji: 
 
 export function StandingsSection({ s }: { s: Session }) {
   const rows = standings(s)
+  const labels = placeLabels(rows)
   const scored = rows.some((r) => r.pf + r.pa > 0)
   const badges = awardsByName(s)
   return (
@@ -121,7 +125,7 @@ export function StandingsSection({ s }: { s: Session }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className={`border-t border-slate-100 dark:border-white/5 ${i === 0 && r.wins > 0 ? 'bg-accent/10' : ''}`}>
-                <td className="px-2 py-2.5 font-black sm:px-4">{medal(i)}</td>
+                <td className="px-2 py-2.5 font-black sm:px-4">{labels[i]}</td>
                 <td className="max-w-[6rem] truncate px-1.5 py-2.5 font-bold sm:max-w-[9rem] sm:px-2">{r.name}</td>
                 <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.wins}</td>
                 <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.losses}</td>
@@ -224,7 +228,7 @@ export function Highlights({ s }: { s: Session }) {
   if (sum.biggestWin) items.push({ icon: <Trophy size={16} />, label: 'Biggest win', value: `${sum.biggestWin.scoreA}–${sum.biggestWin.scoreB}`, sub: join((sum.biggestWin.winner === 'a' ? sum.biggestWin.a : sum.biggestWin.b).map((id) => nameOf(s, id))) })
   if (!items.length) return null
   return (
-    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+    <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2 sm:grid-cols-3">
       {items.map((it) => (
         <div key={it.label} className="card flex items-center gap-3 px-3 py-2.5">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent/15 text-brand">{it.icon}</span>

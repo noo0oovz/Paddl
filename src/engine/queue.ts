@@ -24,6 +24,15 @@ export interface Proposal {
   b: string[]
 }
 
+/**
+ * A fingerprint of who can be picked: everyone active, with their priority overrides. A redraw is pinned together with this, so
+ * if anyone joins, leaves, takes a break, comes back, or is moved with Play next or Send to back, the pin is void: the line it
+ * was chosen from no longer exists. (Games finishing change who is FREE, not who is in the line, and are handled by the free check.)
+ */
+export function lineKey(s: Session): string {
+  return s.players.filter((p) => p.status === 'active').map((p) => `${p.id}${p.prio ? ':' + p.prio : ''}`).sort().join(',')
+}
+
 export function unitsNeeded(f: Format): number {
   return f === 'doubles' ? 4 : 2
 }
@@ -206,6 +215,17 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
   const units = sortUnits(s, availableUnits(s, exclude, counts), s.config.mode)
   if (units.length < need) return null
 
+  // The host asked for a redraw and was shown a match. Use exactly that, as long as every player in it is still free.
+  // (Drawing again later, once the finishers are back in the pool, picked a different match and let people with more
+  // games jump the line.) If anyone in it is no longer available, the pin is ignored and the normal rule applies.
+  if (s.pinned) {
+    // every PLAYER who is free (a fixed team is a unit of two players)
+    const free = new Set(units.flatMap((u) => u.ids))
+    const all = [...s.pinned.a, ...s.pinned.b]
+    const sizeOk = s.pinned.a.length === s.pinned.b.length && all.length === (s.config.format === 'singles' ? 2 : 4)
+    if (sizeOk && s.pinned.line === lineKey(s) && new Set(all).size === all.length && all.every((id) => free.has(id))) return { a: [...s.pinned.a], b: [...s.pinned.b] }
+  }
+
   // Manual overrides: "play next" players are forced in, "sent to back" players only fill leftover spots.
   const front = units.filter((u) => u.pri < 0).slice(0, need)
   const normal = units.filter((u) => u.pri === 0)
@@ -228,7 +248,14 @@ export function proposeMatch(s: Session, exclude: Set<string>, counts = countMat
       // as long as the last person who would get in are eligible, so someone who has just come off court can never
       // be picked ahead of someone who was already waiting (that is what made the "on deck" match change).
       const lastIn = tied[needed - 1]
-      if (lastIn) tied = tied.filter((u) => u.last <= lastIn.last)
+      if (lastIn) {
+        const kept = tied.filter((u) => u.last <= lastIn.last)
+        // This is only a preference. The line is ordered by games, then the back-to-back limit, then wait, so it is not
+        // always ordered by wait: with the limit on, someone who is capped can sort BEFORE someone who waited less, and a
+        // deleted game can lower a wait. The filter could then drop people until fewer than `needed` were left, so no
+        // match could be made and a court sat idle with four people waiting. Never let it leave too few.
+        tied = kept.length >= needed ? kept : tied.slice(0, Math.max(needed, kept.length))
+      }
     }
     tied = tied.slice(0, 9)
     rankOf = (u) => (shuffly(s) ? 0 : tied.indexOf(u))

@@ -1,4 +1,4 @@
-import type { Session } from '../engine/types'
+import { COURT_TAGS, type Session } from '../engine/types'
 import type { RosterEntry } from '../store'
 
 /** What a backup file contains. `app` + `version` let us reject files that are not ours and migrate later. */
@@ -48,6 +48,8 @@ export function sessionProblem(s: unknown): string | null {
   for (const p of s.players as unknown[]) {
     if (!isObj(p) || !isStr(p.id) || !isStr(p.name) || !isNum(p.level) || !['active', 'resting', 'left'].includes(p.status as string)) return 'a player is malformed'
     if (!isNum(p.baseGames) || !isNum(p.lastPlayed) || !Array.isArray(p.intervals)) return 'a player is malformed'
+    // The stats screens destructure every interval as [from, to]; one bad entry crashed Standings.
+    if (!(p.intervals as unknown[]).every((iv) => Array.isArray(iv) && iv.length === 2 && isNum(iv[0]) && (iv[1] === null || isNum(iv[1])))) return 'a player has a bad time range'
     known.add(p.id)
   }
   for (const c of s.courts as unknown[]) {
@@ -55,6 +57,12 @@ export function sessionProblem(s: unknown): string | null {
     const m = c.match
     if (m !== null && (!isObj(m) || !ids(m.a) || !ids(m.b) || !isNum(m.startedAt) || !isNum(m.streak))) return 'a live game is malformed'
     if (isObj(m) && ![...(m.a as string[]), ...(m.b as string[])].every((id) => known.has(id))) return 'a live game names an unknown player'
+    // A winners-stay hold and the court's badges are read on every render. Older saves have neither, so both are optional.
+    if (c.hold !== undefined && c.hold !== null) {
+      if (!isObj(c.hold) || !ids(c.hold.ids) || !isNum(c.hold.streak)) return 'a court hold is malformed'
+      if (!(c.hold.ids as string[]).every((id) => known.has(id))) return 'a court hold names an unknown player'
+    }
+    if (c.tags !== undefined && (!Array.isArray(c.tags) || !c.tags.every((x) => isStr(x) && Object.prototype.hasOwnProperty.call(COURT_TAGS, x)))) return 'a court has unknown badges'
   }
   for (const m of s.matches as unknown[]) {
     if (!isObj(m) || !isStr(m.id) || !isNum(m.seq) || !ids(m.a) || !ids(m.b) || !isNum(m.at)) return 'a game is malformed'

@@ -7,7 +7,7 @@ import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/
 import { fmtDate, fmtDuration, fmtTime, join, plural } from '../lib/util'
 import { reopenSession } from '../engine/session'
 import { removeSession, updateActive } from '../store'
-import { medal } from './Standings'
+import { placeLabels } from './Standings'
 import { HistorySection, Highlights, ParticipationSection, Podium, StandingsSection, StatStrip, minutes } from './ResultsView'
 import { CourtLines } from './art'
 import ThemeSwitch from './ThemeSwitch'
@@ -122,6 +122,7 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
 /** Fixed-width, always-light card that gets rendered to PNG. Inline styles keep it identical in any theme. */
 export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(function ShareCard({ s, part }, ref) {
   const rows = standings(s)
+  const labels = placeLabels(rows)
   const badges = awardsByName(s)
   const sum = summarize(s)
   const maxPlayed = Math.max(1, ...rows.map((r) => r.played))
@@ -146,7 +147,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.id} style={{ borderTop: `1px solid ${C.line}`, background: i === 0 && r.wins > 0 ? '#fffbeb' : undefined, textAlign: 'right' }}>
-                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800 }}>{medal(i)}</td>
+                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800 }}>{labels[i]}</td>
                     <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
                     <td style={{ padding: '8px 6px' }}>{r.wins}</td>
                     <td style={{ padding: '8px 6px' }}>{r.losses}</td>
@@ -216,7 +217,7 @@ function Fact({ label, value, sub }: { label: string; value: string; sub: string
     <div style={{ flex: 1, background: C.soft, borderRadius: 12, padding: '10px 12px', minWidth: 0 }}>
       <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 1.2, color: C.mute }}>{label}</div>
       <div style={{ fontSize: 15, fontWeight: 800, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</div>
-      <div style={{ fontSize: 12, color: C.mute }}>{sub}</div>
+      <div style={{ fontSize: 12, color: C.mute, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>
     </div>
   )
 }

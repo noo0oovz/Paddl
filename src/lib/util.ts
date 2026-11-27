@@ -56,3 +56,20 @@ export function useWakeLock(active: boolean) {
     }
   }, [active])
 }
+
+/**
+ * A result tap on a game that started less than this long ago is ignored. When a court's game is recorded, the court is
+ * redrawn with the NEXT game right under the finger, so a double tap (or a thumb that lands twice) hit the new game's win
+ * button and recorded it as finished after a few milliseconds. A real game is never this short.
+ */
+export const TAP_ARM_MS = 800
+/** The automated browser tests record results within milliseconds of a game starting on purpose; they switch the guard off. */
+const armingOff = () => { try { return localStorage.getItem('paddl:test-no-arming') === '1' } catch { return false } }
+export const gameIsArmed = (startedAt: number, now = Date.now()) => armingOff() || now - startedAt >= TAP_ARM_MS
+
+/**
+ * True for a real Enter press. The Enter that confirms an IME conversion (Japanese, Chinese, Korean, some phone keyboards)
+ * also arrives as a keydown with key "Enter"; treating it as "add this name" added half-typed text.
+ */
+export const isEnter = (e: { key: string; keyCode?: number; nativeEvent?: { isComposing?: boolean } }) =>
+  e.key === 'Enter' && !e.nativeEvent?.isComposing && e.keyCode !== 229

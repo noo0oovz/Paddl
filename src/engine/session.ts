@@ -1,7 +1,7 @@
 import {
   DEFAULT_CONFIG, type Config, type Court, type CourtTag, type Live, type Match, type Player, type Session, type Team,
 } from './types'
-import { busyIds, matchSig, previewQueue, proposeChallengers, proposeMatch, splitWinners, unitsNeeded, waitingUnits } from './queue'
+import { busyIds, lineKey, matchSig, previewQueue, proposeChallengers, proposeMatch, splitWinners, unitsNeeded, waitingUnits } from './queue'
 import { countMatches, gamesOf, medianGames } from './stats'
 
 /** Games a returning player may still be owed beyond the group median. 0: they come back level with the group, never ahead. */
@@ -109,6 +109,13 @@ export function toggleCourtTag(s: Session, courtId: string, tag: CourtTag): Sess
 export function fill(input: Session): Session {
   const s = input
   if (s.endedAt) return s
+  // A pin names players who were waiting. If any of them has since been put on a court by hand (a substitute, a pull-out, a
+  // court redraw), it is stale: when that game ends they would be free again, the pin would match again, and the same four
+  // would be replayed ahead of people with fewer games.
+  if (s.pinned) {
+    const busy = busyIds(s)
+    if ([...s.pinned.a, ...s.pinned.b].some((id) => busy.has(id))) s.pinned = null
+  }
   const counts = countMatches(s.matches)
   let started = false
   for (const court of s.courts) {
@@ -140,6 +147,7 @@ export function fill(input: Session): Session {
   }
   if (started) {
     s.fresh = false // the remix has been used up; later matches go back to strict fairness
+    s.pinned = null
     expireBackPrio(s)
   }
   return s
@@ -158,6 +166,9 @@ export function remixNext(s: Session): Session {
   const oldSig = before ? matchSig(before.a, before.b) : ''
   const hadPrio = d.players.some((p) => p.prio)
   for (const p of d.players) { delete p.prio; delete p.prioAt }
+  // `before` above is what the host sees now (possibly an earlier pinned redraw). The new draw must start from scratch:
+  // while the old pin is still set, every preview below would just return it and the host would get the same match forever.
+  d.pinned = null
   d.fresh = true
   let changed = false
   for (let i = 0; i < MAX_TRIES; i++) {
@@ -167,6 +178,10 @@ export function remixNext(s: Session): Session {
     if (matchSig(n.a, n.b) !== oldSig) { changed = true; break }
   }
   if (!changed && !hadPrio) return s
+  // Pin the redraw: with every court busy nothing starts yet, and by the time one frees the finishers are back in the pool,
+  // so a second draw would differ from what the host was shown. Record the match the host saw and start exactly that.
+  const shown = previewQueue(d, 1)[0]
+  d.pinned = shown && shown.b ? { a: [...shown.a], b: [...shown.b], line: lineKey(d) } : null
   return fill(d)
 }
 
@@ -183,6 +198,7 @@ export function remixCourt(s: Session, courtId: string): Session {
   const oldSig = matchSig(old.a, old.b)
   const keep = isKing(d, c) && old.streak > 0 ? old.a : null
   c.match = null
+  d.pinned = null // the host is redrawing this game: an earlier redraw of the NEXT match must not be handed to this court
   const exclude = busyIds(d)
   if (keep) keep.forEach((id) => exclude.add(id))
   d.fresh = true
@@ -274,6 +290,10 @@ function release(d: Session, id: string) {
     if (sub) {
       const swap = (ids: string[]) => ids.map((x) => (x === id ? sub.ids[0] : x))
       court.match = { ...m, a: swap(m.a), b: swap(m.b) }
+      // The substitute is on court now, so their one-time "Play next" is used up (as it is when a game is drawn, or when
+      // someone is pulled in by hand). Left set, they sorted first again the moment the game ended, a second game in a
+      // row ahead of people who had not played.
+      clearPrio(d, sub.ids)
       return
     }
   }

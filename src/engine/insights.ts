@@ -60,6 +60,14 @@ export function etaText(e: Eta | undefined): string | null {
   return `${g} (~${mins} min)`
 }
 
+/** The same estimate for the sentence "Up in …" (the plain text reads "next game", which does not fit after "in"). */
+export function etaIn(e: Eta | undefined): string | null {
+  if (!e) return null
+  if (e.games === 0 && e.ms === 0) return 'now'
+  const mins = Math.max(1, Math.round(e.ms / 60000))
+  return e.games <= 1 ? `about ${mins} min` : `about ${e.games} games (~${mins} min)`
+}
+
 /* ---------------------------------------------------------------------------------------------
  * Rivalry / nemesis
  * ------------------------------------------------------------------------------------------- */

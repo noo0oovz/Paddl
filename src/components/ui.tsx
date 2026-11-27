@@ -1,18 +1,18 @@
-import { useEffect, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { Illustration } from './art'
+import { useDialog } from '../lib/dialogStack'
 
 /** Bottom sheet on phones, centred dialog on larger screens. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const box = useRef<HTMLDivElement>(null)
+  useDialog(box, onClose)
   return (
     <div className="fixed inset-0 z-[65] flex items-end justify-center bg-slate-950/60 backdrop-blur-sm sm:items-center sm:p-4" onMouseDown={onClose}>
       <div
+        ref={box}
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         className="sheet-in flex max-h-[92dvh] w-full flex-col rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:max-w-lg sm:rounded-3xl dark:border-white/10 dark:bg-slate-900"
         onMouseDown={(e) => e.stopPropagation()}
@@ -39,6 +39,7 @@ export function Segmented<T extends string | number>({
           key={String(o.value)}
           type="button"
           onClick={() => onChange(o.value)}
+          aria-pressed={o.value === value}
           className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-semibold transition ${
             o.value === value
               ? 'border-accent bg-accent text-accent-ink shadow-[0_6px_20px_-8px_rgba(182,255,59,0.7)]'

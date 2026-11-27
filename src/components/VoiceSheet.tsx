@@ -84,7 +84,7 @@ export default function VoiceSheet({ onClose }: { onClose: () => void }) {
             step={0.05}
             value={rate}
             aria-label="Speaking speed"
-            className="w-full accent-[#b6ff3b]"
+            className="h-11 w-full accent-[#b6ff3b]"
             onChange={(e) => setRate(Number(e.target.value))}
             onPointerUp={() => speak(SAMPLE)}
             onKeyUp={() => speak(SAMPLE)}

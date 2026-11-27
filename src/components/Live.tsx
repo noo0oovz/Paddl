@@ -3,7 +3,7 @@ import { ArrowDownToLine, Megaphone, Settings2, Trash2, ArrowUpToLine, Ban, Cloc
 import { COURT_TAGS, type Court, type CourtTag, type Session } from '../engine/types'
 import { previewQueue, waitingUnits, unitsNeeded } from '../engine/queue'
 import { countMatches, playedOf, nameOf } from '../engine/stats'
-import { etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
+import { etaIn, etaText, queueEta, rivalryFor, streakCall } from '../engine/insights'
 import { TIME_MARK_MIN, chime, setSound, useSound } from '../lib/cues'
 import Board from './Board'
 import { useConfirm } from './Confirm'
@@ -13,8 +13,8 @@ import {
   setStatus, substitute, swapOutOfNext, toggleCourtTag, nameTaken, isKing, type Result,
 } from '../engine/session'
 import { validateScore } from '../engine/validate'
-import { undo, updateActive } from '../store'
-import { elapsed, join, plural, useNow } from '../lib/util'
+import { changeCount, undoIfUnchanged, updateActive } from '../store'
+import { elapsed, gameIsArmed, isEnter, join, plural, useNow } from '../lib/util'
 import { Empty, Sheet } from './ui'
 import VoiceSheet from './VoiceSheet'
 import { courtCall, upNextCall } from '../lib/announce'
@@ -31,7 +31,7 @@ export default function Live({ s }: { s: Session }) {
   const [note, setNote] = useState<string | null>(null)
   const noteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // The toast offered after a result is recorded, so a mis-tap can be taken back right where it happened.
-  const [won, setWon] = useState<{ text: string; id: number } | null>(null)
+  const [won, setWon] = useState<{ text: string; id: number; at: number } | null>(null)
   const wonTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [board, setBoard] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
@@ -75,10 +75,15 @@ export default function Live({ s }: { s: Session }) {
   /** A result was recorded: show who won with an Undo button next to it (the same as on the Board). */
   function showWon(text: string) {
     if (wonTimer.current) clearTimeout(wonTimer.current)
-    setWon({ text, id: Date.now() })
+    // changeCount() is read AFTER the result was saved, so it names exactly that change.
+    setWon({ text, id: Date.now(), at: changeCount() })
     wonTimer.current = setTimeout(() => setWon(null), 6000)
   }
   useEffect(() => () => { if (noteTimer.current) clearTimeout(noteTimer.current); if (wonTimer.current) clearTimeout(wonTimer.current) }, [])
+  // The toast says "Undo this result", so it must only stay while that result is still the latest thing that happened.
+  useEffect(() => {
+    if (won && changeCount() !== won.at) setWon(null)
+  }, [s, won])
 
   /** Run a remix; tell the host when no different match-up was possible. */
   function remix(fn: (x: Session) => Session, what: string) {
@@ -115,7 +120,7 @@ export default function Live({ s }: { s: Session }) {
         <div className="w-full min-w-0 text-sm text-slate-500 sm:w-auto dark:text-slate-400">
           {s.matches.length} {s.matches.length === 1 ? 'game' : 'games'} played · {s.players.filter((p) => p.status === 'active').length} playing
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="btn-soft !min-h-10 !px-3" onClick={() => setVoiceOpen(true)} aria-label="Announcer voice settings" title="Choose the announcer voice"><Megaphone size={18} /></button>
           <button className="btn-soft !min-h-10 !px-3" onClick={() => setSound(!sound)} aria-pressed={sound} aria-label={sound ? 'Mute chimes' : 'Turn chimes on'} title={sound ? 'Chimes on (tap to mute). This is the beep when a game starts; use the Call out buttons to announce players.' : 'Chimes off (tap to turn on)'}>
             {sound ? <Volume2 size={18} /> : <VolumeX size={18} />}
@@ -146,7 +151,7 @@ export default function Live({ s }: { s: Session }) {
           {note && <div role="status" className="rounded-xl bg-green-100 px-3 py-2 text-sm font-medium text-green-800 dark:bg-green-950 dark:text-green-300">{note}</div>}
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[repeat(2,minmax(0,1fr))]">
             {s.courts.map((c) => (
-              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side) => { const gid = c.match?.gid; const ids = side === 'a' ? c.match?.a : c.match?.b; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) showWon(`${join((ids ?? []).map((id) => nameOf(s, id)))} won on ${c.name}`) }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
+              <CourtCard key={`${c.id}:${c.match ? c.match.startedAt : 'idle'}`} s={s} c={c} now={now} speaking={speakingId === c.id} onAnnounce={(text) => announce(c.id, text)} onWin={(side, gid) => { if (!c.match || !gameIsArmed(c.match.startedAt)) return; const ids = side === 'a' ? c.match?.a : c.match?.b; if (updateActive((x) => finishMatch(x, c.id, { winner: side, scoreA: null, scoreB: null, expect: gid }))) { refocusCourt = c.id; showWon(`${join((ids ?? []).map((id) => nameOf(s, id)))} won on ${c.name}`) } }} onScore={() => setScoring(c.id)} onTags={() => setTagFor(c.id)} onSub={(id) => setSubFor({ court: c.id, id })} onRemix={() => remix((x) => remixCourt(x, c.id), c.name)} />
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
@@ -208,7 +213,7 @@ export default function Live({ s }: { s: Session }) {
         <div key={won.id} role="status" aria-live="polite" className="paddl-in fixed inset-x-3 top-[3.75rem] z-[55] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-accent/40 bg-slate-900/95 px-3 py-2.5 text-white shadow-[0_0_40px_-10px_rgba(182,255,59,0.6)] backdrop-blur-xl md:top-auto md:bottom-4">
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent text-accent-ink"><Trophy size={15} /></span>
           <span className="min-w-0 flex-1 text-sm leading-snug font-bold [overflow-wrap:anywhere]">{won.text}</span>
-          <button className="btn-soft !min-h-9 shrink-0 !px-3 !text-white" onClick={() => { undo(); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
+          <button className="btn-toast !min-h-9 shrink-0 !px-3" onClick={() => { undoIfUnchanged(won.at); setWon(null) }} aria-label="Undo this result"><Undo2 size={15} /> Undo</button>
         </div>
       )}
       {board && <Board s={s} onClose={() => setBoard(false)} />}
@@ -219,7 +224,10 @@ export default function Live({ s }: { s: Session }) {
   )
 }
 
-function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, onWin, onTags }: { s: Session; c: Court; now: number; speaking: boolean; onAnnounce: (text: string) => void; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b') => void; onTags: () => void }) {
+/** After a result is recorded the court is redrawn as a new card, which drops the focus a keyboard or screen-reader user had. */
+let refocusCourt: string | null = null
+
+function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, onWin, onTags }: { s: Session; c: Court; now: number; speaking: boolean; onAnnounce: (text: string) => void; onScore: () => void; onSub: (id: string) => void; onRemix: () => void; onWin: (side: 'a' | 'b', gid: number | undefined) => void; onTags: () => void }) {
   const m = c.match
   const winners = isKing(s, c)
   const call = streakCall(s, c.id)
@@ -229,8 +237,16 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
   const mins = m ? Math.max(0, now - m.startedAt) / 60000 : 0
   const pct = m ? Math.min(100, (mins / TIME_MARK_MIN) * 100) : 100
   const barColor = !m ? 'bg-slate-600' : mins >= TIME_MARK_MIN ? 'bg-red-600' : mins >= 10 ? 'bg-amber-400' : 'bg-accent'
+  const card = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (refocusCourt !== c.id) return
+    refocusCourt = null
+    if (document.activeElement && document.activeElement !== document.body) return
+    const el = card.current?.querySelector<HTMLElement>('button[aria-label$=" won"]') ?? card.current
+    el?.focus({ preventScroll: true })
+  }, [c.id])
   return (
-    <section className="card paddl-in court-new overflow-hidden">
+    <section ref={card} tabIndex={-1} className="card paddl-in court-new overflow-hidden outline-none">
       <div className="relative flex items-center justify-between border-b border-slate-200 bg-slate-900 px-4 py-2.5 text-white dark:border-white/10 dark:bg-white/[0.04]">
         <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-white/10" />
         <span aria-hidden title={m ? `${Math.floor(mins)} min on court` : undefined} className={`absolute top-0 left-0 h-1 transition-[width] duration-1000 ${barColor}`} style={{ width: `${pct}%` }} />
@@ -277,10 +293,10 @@ function CourtCard({ s, c, now, speaking, onAnnounce, onScore, onSub, onRemix, o
             <Half s={s} ids={m.b} side="near" onSub={onSub} />
           </div>
           <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2">
-            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('a')} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
+            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('a', m.gid)} aria-label={`${join(m.a.map((id) => nameOf(s, id)))} won`}>
               <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.a.map((id) => nameOf(s, id)))} won</span>
             </button>
-            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('b')} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
+            <button className="btn-primary !min-h-12 min-w-0 !justify-start !px-4" onClick={() => onWin('b', m.gid)} aria-label={`${join(m.b.map((id) => nameOf(s, id)))} won`}>
               <Trophy size={18} className="shrink-0" /> <span className="truncate">{join(m.b.map((id) => nameOf(s, id)))} won</span>
             </button>
           </div>
@@ -484,8 +500,8 @@ function AddPlayerSheet({ s, onClose }: { s: Session; onClose: () => void }) {
           {s.config.lateJoinMedian ? ' They start at the average games played, so they are not ahead or behind.' : ''}
         </p>
         <div className="flex gap-2">
-          <input ref={first} className="input" placeholder={teams ? 'Player 1' : 'Name'} value={name} maxLength={30} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label={teams ? 'Player 1 name' : 'Name of the new player'} />
-          {teams && <input className="input" placeholder="Player 2" value={name2} maxLength={30} onChange={(e) => setName2(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label="Player 2 name" />}
+          <input ref={first} className="input" placeholder={teams ? 'Player 1' : 'Name'} value={name} maxLength={30} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => isEnter(e) && add()} aria-label={teams ? 'Player 1 name' : 'Name of the new player'} />
+          {teams && <input className="input" placeholder="Player 2" value={name2} maxLength={30} onChange={(e) => setName2(e.target.value)} onKeyDown={(e) => isEnter(e) && add()} aria-label="Player 2 name" />}
         </div>
         {s.config.mode === 'skill' && (
           <label className="flex items-center justify-between gap-3 text-sm font-semibold">
@@ -535,8 +551,8 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
         <div>
           <div className="label">{teams ? 'Add a late team' : 'Add a late player'}</div>
           <div className="flex gap-2">
-            <input className="input" placeholder={teams ? 'Player 1' : 'Name'} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
-            {teams && <input className="input" placeholder="Player 2" value={name2} onChange={(e) => setName2(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />}
+            <input className="input" placeholder={teams ? 'Player 1' : 'Name'} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => isEnter(e) && add()} />
+            {teams && <input className="input" placeholder="Player 2" value={name2} onChange={(e) => setName2(e.target.value)} onKeyDown={(e) => isEnter(e) && add()} />}
             <button className="btn-primary !px-4" onClick={add} disabled={!ready || dupe} aria-label="Add"><UserPlus size={20} /></button>
           </div>
           {dupe && <p className="mt-1 text-xs font-medium text-red-600">That name is already in this session.</p>}
@@ -551,7 +567,9 @@ function PeopleSheet({ s, onClose }: { s: Session; onClose: () => void }) {
                   title="Tap to rename"
                   onClick={() => {
                     const n = prompt('Rename player', p.name)
-                    if (n) updateActive((x) => renamePlayer(x, p.id, n))
+                    if (!n || n.trim() === p.name) return
+                    if (nameTaken(s, n, p.id)) { alert(`${n.trim()} is already in this session. Pick a different name.`); return }
+                    updateActive((x) => renamePlayer(x, p.id, n.trim().slice(0, 30)))
                   }}
                 >
                   {p.name}
@@ -595,7 +613,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
 }) {
   const next = upcoming[0]
   const winners = s.config.mode === 'winners'
-  const unitWord = s.config.format === 'teams' ? 'teams' : 'players'
+  const unitWord = s.config.format === 'teams' ? 'team' : 'player'
   return (
     <section id="next-match" key={next ? [...next.a, ...(next.b ?? [])].join() : 'none'} className="scroll-mt-28 card paddl-in border-2 border-green-600/40 bg-green-50/60 p-4 dark:bg-green-950/20">
       <div className="mb-2 flex items-center justify-between">
@@ -625,7 +643,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
             ? 'Everyone is on court right now.'
             : winners
               ? 'Waiting for a challenger.'
-              : `Need ${Math.max(1, need - waiting)} more ${unitWord} to make the next match.`}
+              : `Need ${plural(Math.max(1, need - waiting), unitWord)} more to make the next match.`}
         </p>
       )}
       {next && (
@@ -641,7 +659,7 @@ function NextMatch({ s, eta, upcoming, freeCourts, waiting, need, onPick, onSwap
       )}
       {next?.b && (() => {
         const riv = rivalryFor(s, next.a, next.b)
-        const t = etaText(eta.get(next.a[0]))
+        const t = etaIn(eta.get(next.a[0]))
         return (
           <>
             {t && !freeCourts && <p className="mt-2 text-sm font-semibold text-green-700 dark:text-green-400">⏱ Up in {t}</p>}

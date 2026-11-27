@@ -25,16 +25,22 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return
+  // Copy a good response into the cache. The copy MUST be taken before the response is handed to the page: once the page
+  // starts reading the body, cloning it fails, and (as this used to be written) every put silently failed, so the
+  // JavaScript and CSS were never stored for offline use. Only successful responses are kept, so a 404 page from a
+  // mistyped address can never replace the app. waitUntil keeps the worker alive until the write has finished.
+  const keep = (key, res) => {
+    if (!res || !res.ok) return
+    const copy = res.clone()
+    e.waitUntil(caches.open(CACHE).then((c) => c.put(key, copy)).catch(() => {}))
+  }
   if (req.mode === 'navigate') {
     e.respondWith(
-      fetch(req).then((res) => { caches.open(CACHE).then((c) => c.put('./', res.clone())); return res }).catch(() => caches.match('./')),
+      fetch(req).then((res) => { keep('./', res); return res }).catch(() => caches.match('./')),
     )
     return
   }
   e.respondWith(
-    caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-      if (res.ok) caches.open(CACHE).then((c) => c.put(req, res.clone()))
-      return res
-    })),
+    caches.match(req).then((hit) => hit || fetch(req).then((res) => { keep(req, res); return res })),
   )
 })

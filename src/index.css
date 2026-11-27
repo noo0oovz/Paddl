@@ -145,6 +145,10 @@ body::before {
 @utility btn-soft {
   @apply btn border border-slate-200 bg-white/70 text-slate-800 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-slate-100 dark:hover:bg-white/10;
 }
+/* A button on the dark result toast, which is dark in BOTH themes (btn-soft is white in the light theme). */
+@utility btn-toast {
+  @apply btn border border-white/25 bg-white/10 text-white hover:bg-white/20;
+}
 @utility btn-danger {
   @apply btn bg-red-600 text-white hover:bg-red-700;
   box-shadow: 0 6px 20px -8px rgba(240, 54, 74, 0.6);
@@ -251,3 +255,12 @@ body::before {
     animation: none;
   }
 }
+
+/* slate-400 is also used for small text: on light surfaces it was 4.2:1 and on the dark cards 3.8:1 (below the 4.5:1 minimum).
+   Only the TEXT colour changes, so icons, borders and fills keep the palette. The Board is dark in BOTH themes, so inside it the light value is kept (otherwise the light theme would show
+   dark grey on near-black). Anything else that is dark in both themes can opt in with the always-dark class. */
+.text-slate-400 { color: #586482; }
+.dark .text-slate-400,
+.board-scroll .text-slate-400,
+.always-dark .text-slate-400 { color: #8a96b2; }
+.dark .hover\:text-red-600:hover { color: #ff7a86; }
