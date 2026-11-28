@@ -168,7 +168,7 @@ describe('awards and highlights never say the same thing twice', () => {
   })
 })
 
-import { ordinal, placeText, tieNote, tieSizes } from './stats'
+import { ordinal, tieNote, tieSizes } from './stats'
 
 describe('tied places are marked and explained', () => {
   // the night in the latest screenshot
@@ -176,21 +176,23 @@ describe('tied places are marked and explained', () => {
     row('Tiny', 8, 2), row('Voj', 8, 2), row('Stee', 7, 3), row('Aj', 6, 4), row('Julius', 6, 4), row('Kp', 5, 5), row('Zel', 5, 5),
     row('Dar', 4, 6), row('Daria', 3, 7), row('Josh', 3, 7), row('xtia', 3, 7), row('nekky', 2, 8),
   ]
-  it('the places and the tie marks for that night', () => {
+  it('the places for that night: records decide ties, but only the podium keeps them', () => {
     const places = placesOf(night), tied = tieSizes(night)
-    expect(places).toEqual([1, 1, 3, 4, 4, 6, 6, 8, 9, 9, 9, 12])
-    expect(tied).toEqual([2, 2, 1, 2, 2, 2, 2, 1, 3, 3, 3, 1])
-    expect(places.map((p, i) => placeText(p, tied[i]))).toEqual(['T1', 'T1', '3', 'T4', 'T4', 'T6', 'T6', '8', 'T9', 'T9', 'T9', '12'])
+    expect(places).toEqual([1, 1, 3, 4, 4, 6, 6, 8, 9, 9, 9, 12]) // the engine still knows who is level
+    expect(tied).toEqual([2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]) // but only the tie for 1st is shown as a tie
   })
-  it('the explanation names exactly the missing places', () => {
-    expect(tieNote(night)).toBe('T means tied: players with the same record share a place, so there is no 2nd, 5th, 7th, 10th or others.')
+  it('the explanation is about the podium only, and names the missing place', () => {
+    expect(tieNote(night)).toBe('Players with the same record share a place on the podium (tied for 1st), so there is no 2nd. Everyone else is numbered in order.')
+  })
+  it('a tie below the podium needs no explanation at all', () => {
+    expect(tieNote([row('A', 9, 1), row('B', 8, 2), row('C', 7, 3), row('D', 5, 5), row('E', 5, 5)])).toBeNull()
   })
   it('says nothing when nobody is tied', () => {
     expect(tieNote([row('A', 5, 0), row('B', 4, 1), row('C', 2, 3)])).toBeNull()
     expect(tieNote([])).toBeNull()
   })
   it('a single tie for first explains the missing 2nd', () => {
-    expect(tieNote([row('A', 5, 1), row('B', 5, 1), row('C', 4, 2)])).toBe('T means tied: players with the same record share a place, so there is no 2nd.')
+    expect(tieNote([row('A', 5, 1), row('B', 5, 1), row('C', 4, 2)])).toBe('Players with the same record share a place on the podium (tied for 1st), so there is no 2nd. Everyone else is numbered in order.')
   })
   it('people with no decided game are not part of the explanation', () => {
     expect(tieNote([row('A', 3, 1), row('B', 2, 2), row('Idle', 0, 0), row('Idle2', 0, 0)])).toBeNull()
@@ -198,4 +200,52 @@ describe('tied places are marked and explained', () => {
   it('ordinals are right, including 11th, 12th, 13th and 21st to 23rd', () => {
     expect([1, 2, 3, 4, 10, 11, 12, 13, 14, 21, 22, 23, 101, 111, 112].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '10th', '11th', '12th', '13th', '14th', '21st', '22nd', '23rd', '101st', '111th', '112th'])
   })
+})
+
+import { rankNumbers } from './stats'
+
+describe('rankNumbers: ties only on the podium, then one number per row, no skipping', () => {
+  it('the screenshot night: two co-champions, then 3, 4, 5 ... with no T and no skips', () => {
+    const night = [
+      row('Tiny', 8, 2), row('Voj', 8, 2), row('Stee', 7, 3), row('Aj', 6, 4), row('Julius', 6, 4), row('Kp', 5, 5), row('Zel', 5, 5),
+      row('Dar', 4, 6), row('Daria', 3, 7), row('Josh', 3, 7), row('xtia', 3, 7), row('nekky', 2, 8),
+    ]
+    expect(rankNumbers(night)).toEqual([1, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  })
+
+  it('the layout the user showed: 1, 2, 3 then 4, 5, 6 ... even when two players have the same record below the podium', () => {
+    const rows = [row('Tan', 6, 1), row('Yves', 6, 2), row('Dhalia', 3, 2), row('Jess', 4, 3), row('Josh', 4, 3), row('Nathan', 2, 3), row('Migz', 3, 5)]
+    // Jess and Josh are level (4-3) but sit below the podium, so they simply get 4 and 5
+    expect(rankNumbers(rows)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('a tie for 2nd shares the number, and the next row carries on from the people before it', () => {
+    expect(rankNumbers([row('A', 9, 1), row('B', 7, 3), row('C', 7, 3), row('D', 6, 4), row('E', 5, 5)])).toEqual([1, 2, 2, 4, 5])
+  })
+
+  it('a tie that straddles the podium edge stays tied on the podium, and the next row follows', () => {
+    // C and D are level and hold 3rd place together; E then follows as 5
+    expect(rankNumbers([row('A', 9, 1), row('B', 8, 2), row('C', 7, 3), row('D', 7, 3), row('E', 6, 4)])).toEqual([1, 2, 3, 3, 5])
+  })
+
+  it('players below the podium who are level are NOT tied: they just come one after the other', () => {
+    const r = [row('A', 9, 0), row('B', 8, 1), row('C', 7, 2), row('D', 5, 5), row('E', 5, 5), row('F', 5, 5), row('G', 1, 9)]
+    expect(rankNumbers(r)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('below the podium every row has its own number, so the last row equals the number of players', () => {
+    // three clear podium places, then pairs of equal records below them
+    for (let n = 5; n <= 16; n++) {
+      const rows = [row('A', 30, 0), row('B', 29, 1), row('C', 28, 2), ...Array.from({ length: n - 3 }, (_, i) => row('P' + i, 20 - Math.floor(i / 2), 5 + Math.floor(i / 2)))]
+      const nums = rankNumbers(rows)
+      expect(nums.slice(0, 3), `${n} players: the podium`).toEqual([1, 2, 3])
+      expect(nums, `${n} players: 1, 2, 3, 4, 5 ...`).toEqual(Array.from({ length: n }, (_, i) => i + 1))
+    }
+  })
+
+  it('people with no decided game still get a number after everyone who played (the table shows a dash for them)', () => {
+    const nums = rankNumbers([row('A', 3, 1), row('B', 2, 2), row('Idle', 0, 0)])
+    expect(nums).toEqual([1, 2, 3])
+  })
+  it('an empty list is fine', () => { expect(rankNumbers([])).toEqual([]) })
 })

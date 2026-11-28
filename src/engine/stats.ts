@@ -117,17 +117,22 @@ export function placesOf(rows: PlayerStat[]): number[] {
 }
 
 /**
- * How many players share each row's place. 1 means a clear place on its own; 2 or more means they are tied (equal records,
- * so nothing says who is better, and none of them is ranked above the others).
+ * The number shown in the # column. Ties only matter on the PODIUM (the top three places): players level for 1st, 2nd or 3rd share
+ * that number. Everyone below the podium simply gets the next number by position (4, 5, 6 ... one per row, no skips and no ties), even
+ * when two of them have the same record, so the column always reads in order and the last row equals the number of players.
+ */
+export function rankNumbers(rows: PlayerStat[]): number[] {
+  const places = placesOf(rows)
+  return rows.map((_, i) => (places[i] <= 3 ? places[i] : i + 1))
+}
+
+/**
+ * How many players share each row's place ON THE PODIUM. 1 means a place on its own; 2 or more means a tie for 1st, 2nd or 3rd (equal
+ * records, so nothing says who is better). Below the podium nobody is tied: every row has its own number (see rankNumbers), so this is 1.
  */
 export function tieSizes(rows: PlayerStat[]): number[] {
   const places = placesOf(rows)
-  return places.map((p) => places.filter((q) => q === p).length)
-}
-
-/** "1", "T2" (tied for 2nd) and so on: the text for the place column. A tie is marked with a T, as in sports tables. */
-export function placeText(place: number, tied: number): string {
-  return tied > 1 ? `T${place}` : String(place)
+  return places.map((p) => (p <= 3 ? places.filter((q) => q === p).length : 1))
 }
 
 /** "1st", "2nd", "3rd", "4th" ... "11th", "12th", "21st". */
@@ -138,17 +143,22 @@ export function ordinal(n: number): string {
 }
 
 /**
- * One sentence that explains the gaps in the numbers, or null when there are no ties: "Players with the same record share a
- * place, and the next place skips them, so there is no 2nd or 5th." Only names the places that are missing.
+ * One sentence about a tie on the podium, or null when there is none. It says which places are shared and which one is missing, because
+ * "1, 1, 3" looks like a mistake until it is explained: "Tiny and Voj are level for 1st, so there is no 2nd." Only the podium can tie;
+ * below it every row has its own number.
  */
 export function tieNote(rows: PlayerStat[]): string | null {
-  const places = placesOf(rows.filter((r) => r.wins + r.losses > 0))
-  if (!places.length || places.every((p, i) => places.indexOf(p) === i)) return null
-  const have = new Set(places)
+  const played = rows.filter((r) => r.wins + r.losses > 0)
+  const places = placesOf(played)
+  const shared = [...new Set(places.filter((p) => p <= 3 && places.filter((q) => q === p).length > 1))].sort((x, y) => x - y)
+  if (!shared.length) return null
+  const have = new Set(places.filter((p) => p <= 3))
   const missing: number[] = []
-  for (let p = 2; p <= Math.max(...places); p++) if (!have.has(p)) missing.push(p)
-  const gap = missing.length ? `, so there is no ${missing.length > 4 ? `${missing.slice(0, 4).map(ordinal).join(', ')} or others` : missing.map(ordinal).join(missing.length === 2 ? ' or ' : ', ')}` : ''
-  return `T means tied: players with the same record share a place${gap}.`
+  const top = Math.max(...places.filter((p) => p <= 3))
+  for (let p = 2; p <= top; p++) if (!have.has(p)) missing.push(p)
+  const who = shared.map((p) => `${ordinal(p)}`).join(shared.length === 2 ? ' and ' : ', ')
+  const gap = missing.length ? `, so there is no ${missing.map(ordinal).join(missing.length === 2 ? ' or ' : ', ')}` : ''
+  return `Players with the same record share ${shared.length === 1 ? 'a place' : 'places'} on the podium (tied for ${who})${gap}. Everyone else is numbered in order.`
 }
 
 /**
