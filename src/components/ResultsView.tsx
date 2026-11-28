@@ -3,7 +3,7 @@ import { ChevronDown, Crown, Flame, Timer, Trophy } from 'lucide-react'
 import type { Session } from '../engine/types'
 import { PaddleBall } from './art'
 import { placeLabels } from './Standings'
-import { nameOf, playerStandings, podiumOf, standings, summarize, type PlayerStat } from '../engine/stats'
+import { nameOf, ordinal, playerStandings, podiumOf, standings, summarize, tieNote, type PlayerStat } from '../engine/stats'
 import { join } from '../lib/util'
 import { awardsByName, highlightsNotInAwards } from '../engine/insights'
 
@@ -31,6 +31,9 @@ export function Podium({ rows }: { rows: PlayerStat[] }) {
   const order = classic ? [list[1], list[0], list[2]] : list
   const heightOf = (place: number) => (place === 1 ? 'h-24' : place === 2 ? 'h-16' : 'h-12')
   const cols = Math.min(order.length, 5)
+  const sharing = (place: number) => list.filter((x) => x.place === place).length > 1
+  /** "Champion" / "Co-champion", "2nd" / "Tied 2nd" */
+  const caption = (place: number) => (place === 1 ? (sharing(1) ? 'Co-champion' : 'Champion') : sharing(place) ? `Tied ${ordinal(place)}` : ordinal(place))
   return (
     <section className="card relative mt-5 overflow-hidden px-3 pt-6 pb-0 text-center" aria-label="Podium">
       <span aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-accent/10 to-transparent" />
@@ -41,7 +44,8 @@ export function Podium({ rows }: { rows: PlayerStat[] }) {
             <div key={p.id} className="flex flex-col items-center">
               <div className={first ? 'text-4xl drop-shadow-[0_0_14px_rgba(255,194,51,0.7)]' : 'text-3xl'}>{first ? '👑' : medal(place - 1)}</div>
               <div className={`mt-1 line-clamp-2 w-full px-1 font-black leading-tight tracking-tight break-words ${first ? 'text-lg' : 'text-sm'}`}>{p.name}</div>
-              <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">{p.wins}W · {p.losses}L</div>
+              <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">{p.wins}W · {p.losses}L</div>
+              <div className={`mb-2 text-[11px] font-bold tracking-wide uppercase ${first ? 'text-brand' : 'text-slate-500 dark:text-slate-400'}`}>{caption(place)}</div>
               <div
                 className={`flex w-full items-start justify-center rounded-t-2xl border border-b-0 pt-2 text-2xl font-black ${heightOf(place)} ${
                   first
@@ -123,7 +127,7 @@ export function StandingsSection({ s }: { s: Session }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className={`border-t border-slate-100 dark:border-white/5 ${i === 0 && r.wins > 0 ? 'bg-accent/10' : ''}`}>
-                <td className="px-2 py-2.5 font-black sm:px-4">{labels[i]}</td>
+                <td className="px-2 py-2.5 font-black whitespace-nowrap sm:px-4">{labels[i]}</td>
                 <td className="max-w-[6rem] truncate px-1.5 py-2.5 font-bold sm:max-w-[9rem] sm:px-2">{r.name}</td>
                 <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.wins}</td>
                 <td className="px-1.5 py-2.5 sm:px-2 text-right tabular-nums">{r.losses}</td>
@@ -140,6 +144,7 @@ export function StandingsSection({ s }: { s: Session }) {
           </tbody>
         </table>
       </div>
+      {tieNote(rows) && <p className="px-4 pt-2 text-xs text-slate-500 dark:text-slate-400">{tieNote(rows)}</p>}
       {!scored && [...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].length > 0 && (
         <p className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400">{[...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].map((a) => `${a.emoji} ${a.title}`).join('  ·  ')}</p>
       )}

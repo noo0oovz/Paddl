@@ -1,5 +1,5 @@
 import { awardsByName } from '../engine/insights'
-import { placesOf, standings } from '../engine/stats'
+import { placeText, placesOf, standings, tieNote, tieSizes } from '../engine/stats'
 import type { PlayerStat } from '../engine/stats'
 import type { Session } from '../engine/types'
 import { Empty } from './ui'
@@ -15,15 +15,19 @@ export function medal(i: number): string {
  */
 export function placeLabels(rows: PlayerStat[]): string[] {
   const places = placesOf(rows)
+  const tied = tieSizes(rows)
   return rows.map((r, i) => {
     if (r.wins + r.losses === 0) return '–'
-    return r.wins > 0 && places[i] <= 3 ? medal(places[i] - 1) : String(places[i])
+    const mark = tied[i] > 1 ? 'T' : ''
+    // a shared place shows the medal AND the tie mark (a medal alone would read as the one and only holder of that place)
+    return r.wins > 0 && places[i] <= 3 ? medal(places[i] - 1) + mark : placeText(places[i], tied[i])
   })
 }
 
 export default function Standings({ s }: { s: Session }) {
   const rows = standings(s)
-  const places = placeLabels(rows)
+  const labels = placeLabels(rows)
+  const note = s.matches.length > 0 ? tieNote(rows) : null
   const scored = rows.some((r) => r.pf + r.pa > 0)
   const badges = awardsByName(s)
   if (!s.players.length) return <Empty scene="players" title="No players yet" hint="Open Courts, then Players, to add some." />
@@ -48,7 +52,7 @@ export default function Standings({ s }: { s: Session }) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800/60">
-                <td className="px-2 sm:px-3 py-2.5 font-bold">{played ? places[i] : '–'}</td>
+                <td className="px-2 sm:px-3 py-2.5 font-bold whitespace-nowrap">{played ? labels[i] : '–'}</td>
                 <td className="max-w-[6rem] sm:max-w-[9rem] truncate px-1.5 sm:px-2 py-2.5 font-semibold">
                   {r.name}
                   {r.status !== 'active' && <span className="ml-1 text-xs font-normal text-slate-400">({r.status === 'resting' ? 'break' : 'left'})</span>}
@@ -70,6 +74,7 @@ export default function Standings({ s }: { s: Session }) {
       {!scored && [...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].length > 0 && (
         <p className="mt-2 text-xs text-slate-500">{[...new Map([...badges.values()].flat().map((a) => [a.id, a])).values()].map((a) => `${a.emoji} ${a.title}`).join('  ·  ')}</p>
       )}
+      {note && <p className="mt-2 text-xs text-slate-500">{note}</p>}
       <p className="mt-2 text-xs text-slate-500">Ranked by win rate (small samples are smoothed){scored ? ', then point difference' : ''}. GP = games played.</p>
     </div>
   )

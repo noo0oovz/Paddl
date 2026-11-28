@@ -167,3 +167,35 @@ describe('awards and highlights never say the same thing twice', () => {
     for (const h of left) expect(aw.some((a) => (h.key === 'duo' && a.id === 'duo') || (h.key === 'streak' && a.id === 'streak'))).toBe(false)
   })
 })
+
+import { ordinal, placeText, tieNote, tieSizes } from './stats'
+
+describe('tied places are marked and explained', () => {
+  // the night in the latest screenshot
+  const night = [
+    row('Tiny', 8, 2), row('Voj', 8, 2), row('Stee', 7, 3), row('Aj', 6, 4), row('Julius', 6, 4), row('Kp', 5, 5), row('Zel', 5, 5),
+    row('Dar', 4, 6), row('Daria', 3, 7), row('Josh', 3, 7), row('xtia', 3, 7), row('nekky', 2, 8),
+  ]
+  it('the places and the tie marks for that night', () => {
+    const places = placesOf(night), tied = tieSizes(night)
+    expect(places).toEqual([1, 1, 3, 4, 4, 6, 6, 8, 9, 9, 9, 12])
+    expect(tied).toEqual([2, 2, 1, 2, 2, 2, 2, 1, 3, 3, 3, 1])
+    expect(places.map((p, i) => placeText(p, tied[i]))).toEqual(['T1', 'T1', '3', 'T4', 'T4', 'T6', 'T6', '8', 'T9', 'T9', 'T9', '12'])
+  })
+  it('the explanation names exactly the missing places', () => {
+    expect(tieNote(night)).toBe('T means tied: players with the same record share a place, so there is no 2nd, 5th, 7th, 10th or others.')
+  })
+  it('says nothing when nobody is tied', () => {
+    expect(tieNote([row('A', 5, 0), row('B', 4, 1), row('C', 2, 3)])).toBeNull()
+    expect(tieNote([])).toBeNull()
+  })
+  it('a single tie for first explains the missing 2nd', () => {
+    expect(tieNote([row('A', 5, 1), row('B', 5, 1), row('C', 4, 2)])).toBe('T means tied: players with the same record share a place, so there is no 2nd.')
+  })
+  it('people with no decided game are not part of the explanation', () => {
+    expect(tieNote([row('A', 3, 1), row('B', 2, 2), row('Idle', 0, 0), row('Idle2', 0, 0)])).toBeNull()
+  })
+  it('ordinals are right, including 11th, 12th, 13th and 21st to 23rd', () => {
+    expect([1, 2, 3, 4, 10, 11, 12, 13, 14, 21, 22, 23, 101, 111, 112].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '10th', '11th', '12th', '13th', '14th', '21st', '22nd', '23rd', '101st', '111th', '112th'])
+  })
+})

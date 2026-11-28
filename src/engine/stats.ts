@@ -117,6 +117,41 @@ export function placesOf(rows: PlayerStat[]): number[] {
 }
 
 /**
+ * How many players share each row's place. 1 means a clear place on its own; 2 or more means they are tied (equal records,
+ * so nothing says who is better, and none of them is ranked above the others).
+ */
+export function tieSizes(rows: PlayerStat[]): number[] {
+  const places = placesOf(rows)
+  return places.map((p) => places.filter((q) => q === p).length)
+}
+
+/** "1", "T2" (tied for 2nd) and so on: the text for the place column. A tie is marked with a T, as in sports tables. */
+export function placeText(place: number, tied: number): string {
+  return tied > 1 ? `T${place}` : String(place)
+}
+
+/** "1st", "2nd", "3rd", "4th" ... "11th", "12th", "21st". */
+export function ordinal(n: number): string {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return `${n}th`
+  return `${n}${({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th'}`
+}
+
+/**
+ * One sentence that explains the gaps in the numbers, or null when there are no ties: "Players with the same record share a
+ * place, and the next place skips them, so there is no 2nd or 5th." Only names the places that are missing.
+ */
+export function tieNote(rows: PlayerStat[]): string | null {
+  const places = placesOf(rows.filter((r) => r.wins + r.losses > 0))
+  if (!places.length || places.every((p, i) => places.indexOf(p) === i)) return null
+  const have = new Set(places)
+  const missing: number[] = []
+  for (let p = 2; p <= Math.max(...places); p++) if (!have.has(p)) missing.push(p)
+  const gap = missing.length ? `, so there is no ${missing.length > 4 ? `${missing.slice(0, 4).map(ordinal).join(', ')} or others` : missing.map(ordinal).join(missing.length === 2 ? ' or ' : ', ')}` : ''
+  return `T means tied: players with the same record share a place${gap}.`
+}
+
+/**
  * Who stands on the podium: everyone in the top three PLACES who has won a game, so a tie for 2nd shows every player
  * tied for 2nd (and nobody is called 3rd). At most 5 are shown, so a big tie cannot take over the page.
  */

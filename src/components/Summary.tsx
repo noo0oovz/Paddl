@@ -1,7 +1,7 @@
 import { forwardRef, useRef, useState, type ReactNode } from 'react'
 import { ArrowLeft, ChevronDown, Download, FileSpreadsheet, Share2, Sparkles, Trash2 } from 'lucide-react'
 import type { Session } from '../engine/types'
-import { nameOf, podiumOf, standings, summarize } from '../engine/stats'
+import { nameOf, ordinal, podiumOf, standings, summarize, tieNote } from '../engine/stats'
 import { awards, highlightsNotInAwards, awardsByName, type Award } from '../engine/insights'
 import { download, fileName, canShareFile, renderPng, shareImage } from '../lib/exportImage'
 import { fmtDate, fmtDuration, fmtTime, join, plural } from '../lib/util'
@@ -79,7 +79,8 @@ export const RecapCard = forwardRef<HTMLDivElement, { s: Session }>(function Rec
                 <div key={p.id} style={{ textAlign: 'center', minWidth: 0 }}>
                   <div style={{ fontSize: i === 0 ? 40 : 32, lineHeight: 1.1 }}>{i === 0 ? '👑' : i === 1 ? '🥈' : '🥉'}</div>
                   <div style={{ fontSize: i === 0 ? 20 : order.length > 3 ? 14 : 16, fontWeight: 800, marginTop: 4, lineHeight: 1.15, overflowWrap: 'anywhere' }}>{p.name}</div>
-                  <div style={{ fontSize: 13, color: C.mute, margin: '2px 0 8px', fontWeight: 600 }}>{p.wins}W · {p.losses}L</div>
+                  <div style={{ fontSize: 13, color: C.mute, marginTop: 2, fontWeight: 600 }}>{p.wins}W · {p.losses}L</div>
+                  <div style={{ fontSize: 11, color: i === 0 ? C.green : C.mute, margin: '1px 0 8px', fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase' }}>{podium.filter((x) => x.place === pl).length > 1 ? (pl === 1 ? 'Co-champion' : `Tied ${ordinal(pl)}`) : pl === 1 ? 'Champion' : ordinal(pl)}</div>
                   <div style={{ height: heightOf(pl), borderRadius: '14px 14px 0 0', border: `1px solid ${i === 0 ? 'rgba(120,190,20,0.5)' : C.line}`, borderBottom: 'none', background: i === 0 ? 'linear-gradient(180deg, rgba(182,255,59,0.4), rgba(182,255,59,0.08))' : C.soft, color: i === 0 ? C.green : C.mute, fontSize: 26, fontWeight: 900, paddingTop: 8 }}>{pl}</div>
                 </div>
               )
@@ -138,7 +139,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
               <thead>
                 <tr style={{ color: C.mute, fontSize: 11, textAlign: 'right' }}>
-                  <th style={{ textAlign: 'left', padding: '4px 6px', width: 36 }}>#</th>
+                  <th style={{ textAlign: 'left', padding: '4px 6px', width: 56 }}>#</th>
                   <th style={{ textAlign: 'left', padding: '4px 6px' }}>PLAYER</th>
                   <th style={{ padding: '4px 6px' }}>W</th>
                   <th style={{ padding: '4px 6px' }}>L</th>
@@ -149,7 +150,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.id} style={{ borderTop: `1px solid ${C.line}`, background: i === 0 && r.wins > 0 ? '#fffbeb' : undefined, textAlign: 'right' }}>
-                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800 }}>{labels[i]}</td>
+                    <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 800, whiteSpace: 'nowrap' }}>{labels[i]}</td>
                     <td style={{ textAlign: 'left', padding: '8px 6px', fontWeight: 700 }}>{r.name}</td>
                     <td style={{ padding: '8px 6px' }}>{r.wins}</td>
                     <td style={{ padding: '8px 6px' }}>{r.losses}</td>
@@ -163,6 +164,7 @@ export const ShareCard = forwardRef<HTMLDivElement, { s: Session; part: Part }>(
                 ))}
               </tbody>
             </table>
+            {tieNote(rows) && <div style={{ paddingTop: 10, fontSize: 12, color: C.mute }}>{tieNote(rows)}</div>}
             {(extra.length > 0 || sum.biggestWin) && (
               <div style={{ paddingTop: 18, display: 'flex', gap: 10 }}>
                 {extra.map((h) => <Fact key={h.key} label={h.label.toUpperCase()} value={h.value} sub={h.sub} />)}
