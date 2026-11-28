@@ -1,5 +1,5 @@
 import { awardsByName } from '../engine/insights'
-import { placesOf, rankNumbers, standings, tieNote, tieSizes } from '../engine/stats'
+import { placesOf, standings, tieNote, tieSizes } from '../engine/stats'
 import type { PlayerStat } from '../engine/stats'
 import type { Session } from '../engine/types'
 import { Empty } from './ui'
@@ -9,18 +9,17 @@ export function medal(i: number): string {
 }
 
 /**
- * What to show in the # column for each row. Only the podium can tie: a medal for the top three places, with a T when two or more players
- * share that place (a medal alone would read as the only holder of it). Everyone below the podium has a plain number by position
- * (4, 5, 6 ...), one per row with no skips, even when their records match. A player with no decided game shows a dash.
+ * What to show in the # column for each row (standard competition ranking: 1, 1, 3, 4, 4, 6). Players with the same record share a
+ * place and the next place skips them. A tied place carries a T; the top three places show a medal (a medal alone would read as the only
+ * holder of it). A player with no decided game shows a dash.
  */
 export function placeLabels(rows: PlayerStat[]): string[] {
-  const nums = rankNumbers(rows)
   const places = placesOf(rows)
   const tied = tieSizes(rows)
   return rows.map((r, i) => {
     if (r.wins + r.losses === 0) return '–'
-    if (places[i] <= 3 && r.wins > 0) return medal(places[i] - 1) + (tied[i] > 1 ? 'T' : '')
-    return String(nums[i])
+    const mark = tied[i] > 1 ? 'T' : ''
+    return places[i] <= 3 && r.wins > 0 ? medal(places[i] - 1) + mark : mark + places[i]
   })
 }
 

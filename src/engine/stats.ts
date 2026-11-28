@@ -117,22 +117,12 @@ export function placesOf(rows: PlayerStat[]): number[] {
 }
 
 /**
- * The number shown in the # column. Ties only matter on the PODIUM (the top three places): players level for 1st, 2nd or 3rd share
- * that number. Everyone below the podium simply gets the next number by position (4, 5, 6 ... one per row, no skips and no ties), even
- * when two of them have the same record, so the column always reads in order and the last row equals the number of players.
- */
-export function rankNumbers(rows: PlayerStat[]): number[] {
-  const places = placesOf(rows)
-  return rows.map((_, i) => (places[i] <= 3 ? places[i] : i + 1))
-}
-
-/**
- * How many players share each row's place ON THE PODIUM. 1 means a place on its own; 2 or more means a tie for 1st, 2nd or 3rd (equal
- * records, so nothing says who is better). Below the podium nobody is tied: every row has its own number (see rankNumbers), so this is 1.
+ * How many players share each row's place (1 = a place on its own, 2 or more = a tie: equal records, so nothing says who is
+ * better). Standard competition ranking applies to the whole table: tied players share a number and the next number skips them.
  */
 export function tieSizes(rows: PlayerStat[]): number[] {
   const places = placesOf(rows)
-  return places.map((p) => (p <= 3 ? places.filter((q) => q === p).length : 1))
+  return places.map((p) => places.filter((q) => q === p).length)
 }
 
 /** "1st", "2nd", "3rd", "4th" ... "11th", "12th", "21st". */
@@ -143,22 +133,16 @@ export function ordinal(n: number): string {
 }
 
 /**
- * One sentence about a tie on the podium, or null when there is none. It says which places are shared and which one is missing, because
- * "1, 1, 3" looks like a mistake until it is explained: "Tiny and Voj are level for 1st, so there is no 2nd." Only the podium can tie;
- * below it every row has its own number.
+ * One sentence about any tie, or null when there is none. "1, 1, 3" or "4, 4, 6" looks like a mistake until it is explained, so it names
+ * the shared places and says the numbers after them are skipped. Players with no decided game are left out.
  */
 export function tieNote(rows: PlayerStat[]): string | null {
-  const played = rows.filter((r) => r.wins + r.losses > 0)
-  const places = placesOf(played)
-  const shared = [...new Set(places.filter((p) => p <= 3 && places.filter((q) => q === p).length > 1))].sort((x, y) => x - y)
+  const places = placesOf(rows.filter((r) => r.wins + r.losses > 0))
+  const shared = [...new Set(places.filter((p) => places.filter((q) => q === p).length > 1))].sort((x, y) => x - y)
   if (!shared.length) return null
-  const have = new Set(places.filter((p) => p <= 3))
-  const missing: number[] = []
-  const top = Math.max(...places.filter((p) => p <= 3))
-  for (let p = 2; p <= top; p++) if (!have.has(p)) missing.push(p)
-  const who = shared.map((p) => `${ordinal(p)}`).join(shared.length === 2 ? ' and ' : ', ')
-  const gap = missing.length ? `, so there is no ${missing.map(ordinal).join(missing.length === 2 ? ' or ' : ', ')}` : ''
-  return `Players with the same record share ${shared.length === 1 ? 'a place' : 'places'} on the podium (tied for ${who})${gap}. Everyone else is numbered in order.`
+  const shown = shared.slice(0, 3).map(ordinal)
+  const who = shared.length > 3 ? shown.join(', ') + ' and more' : shown.length === 1 ? shown[0] : shown.slice(0, -1).join(', ') + ' and ' + shown[shown.length - 1]
+  return `Players with the same record share a place (tied for ${who}), so the places right after are skipped.`
 }
 
 /**
